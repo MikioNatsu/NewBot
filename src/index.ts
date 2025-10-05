@@ -23,7 +23,7 @@ import {
   buyPremiumMenu,
   buyPremiumProfile,
   buyPremiumProfileDetail,
-} from "./callbacks/buyPremium";
+} from "./callbacks/premium";
 import { donate, donateCB } from "./commands/donate";
 import { setLanguageCB } from "./callbacks/lang";
 import {
@@ -121,7 +121,6 @@ U o‘rnatilgandan so‘ng bot orqali buyurtmalarni tezroq tasdiqlash mumkin bo�
     );
   }
 
-  // ✅ Endi DB ga yozamiz
   const order = await Order.create({
     userId: ctx.from?.id,
     productId: pending.stars,
@@ -194,6 +193,7 @@ bot.catch((err) => {
 
 async function startBot() {
   try {
+    console.log("MongoDB ulanda Va Bot ishlamoqda!");
     await mongoose.connect(process.env.MONGODB_URI!);
     bot.start();
     console.log("✅ MongoDB ulandi va bot ishga tushdi");

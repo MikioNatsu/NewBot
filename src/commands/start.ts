@@ -16,7 +16,7 @@ export const start = async (ctx: MyContext) => {
   const sum = await Donate.aggregate([
     { $group: { _id: null, total: { $sum: "$amount" } } },
   ]);
-  const weNeed = 77000;
+  const weNeed = Number(process.env.WENEED ?? 0);
   const totalSum = sum.length > 0 ? sum[0].total : 0;
   function makeProgressBar(current: number, goal: number, size = 10): string {
     const progress = Math.min(1, current / goal);

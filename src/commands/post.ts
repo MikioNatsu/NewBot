@@ -1,5 +1,6 @@
 import { MyContext } from "../types";
 import { Donate } from "../models/Donate"; // 📌 DB model
+import { bot } from "../index";
 const ADMIN = process.env.ADMIN as string;
 const POST_CHANNEL = -1002832062191;
 
@@ -73,7 +74,11 @@ export const handleDonateAmount = async (ctx: MyContext) => {
           [
             {
               text: "📊 Statistika",
-              url: `https://t.me/UzbYulduzlarBot?start=donatestats`,
+              url: `https://t.me/${
+                (
+                  await bot.api.getMe()
+                ).username
+              }?start=donatestats`,
             },
           ],
         ],

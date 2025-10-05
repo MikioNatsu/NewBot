@@ -2,29 +2,19 @@ services:
   bot:
     build: .
     container_name: telegram-bot
-    env_file:
-      - .env
-    # Если нужно "пробросить" порт для webhook,
-    # то указываем, например: "3000:3000".
-    # В нашем случае используется long polling, так что доступ к порту не требуется,
-    # но вот пример вам на будущее:
+    environment:
+      - MONGODB_URI=mongodb://root:rootpassword@mongo:27017/telegram-bot?authSource=admin
+      - BOT_TOKEN=8353947037:AAEo1r4t9xEbap_Z5w9P1okIFDxcCOYUzUA
+      - ADMIN=6076223538
+      - photoId=AgACAgIAAxkBAAMEaNaXX1rRiXOd59k9cDc96XVdc80AAm_3MRsaPrFKbrqbY_sXe9EBAAMCAAN5AAM2BA
+      - CHECK_PAYMENT=-1003097441586
+      - CHANNEL_IDS=-1002229098897
+      - UZCARD=5614681627371952
+      - SMM_API_URL=https://smmya.com/api/v2/
+      - SMM_API_KEY=308bae5dfb58417f0fb728962db66b7a
     ports:
       - '3000:3000'
     depends_on:
       - mongo
     networks:
       - app-network
-
-  mongo:
-    image: mongo:6
-    container_name: mongo-db
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: rootpassword
-    ports:
-      - '27017:27017'
-    networks:
-      - app-network
-
-networks:
-  app-network:
