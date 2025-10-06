@@ -9,6 +9,7 @@ import {
 } from "grammy";
 import mongoose from "mongoose";
 import { hydrate } from "@grammyjs/hydrate";
+import { run, RunnerHandle } from "@grammyjs/runner"; // Parallel ishlov berish uchun qo'shdim
 import { MyContext, SessionData } from "./types";
 import { start } from "./commands/start";
 import { profile } from "./callbacks/profile";
@@ -34,6 +35,11 @@ import {
 } from "./commands/post";
 import { Donate } from "./models/Donate";
 import { escapeHTML } from "./utils/escapeHTML";
+import {
+  handleNewPost,
+  newPostCallbackHandlers,
+  newPostCommand,
+} from "./commands/newpost";
 
 const BOT_API_TOKEN = process.env.BOT_TOKEN!;
 const CHANNEL_ID = process.env.CHECK_PAYMENT!;
@@ -47,6 +53,10 @@ function initialSession(): SessionData {
 bot.use(session({ initial: initialSession }));
 bot.use(hydrate());
 
+bot.drop((ctx) => {
+  return !(ctx.message?.text || ctx.message?.photo || ctx.callbackQuery);
+});
+
 bot.api.setMyCommands([
   { command: "start", description: "Botni ishga tushirish" },
   {
@@ -57,8 +67,10 @@ bot.api.setMyCommands([
 bot.command("start", start);
 bot.command("donat", donate);
 bot.command("post", postDonate);
+bot.command("newpost", newPostCommand);
 
 bot.on("message:text", async (ctx) => {
+  // 🔹 Donat bilan bog‘liq holatlar
   if (ctx.session.state === "awaiting_donate_user") {
     return handleDonateUser(ctx);
   }
@@ -68,7 +80,13 @@ bot.on("message:text", async (ctx) => {
   if (ctx.session.state === "awaiting_donate_amount") {
     return handleDonateAmount(ctx);
   }
+
+  // 🔹 NewPost AI/Manual post holatlari
+  if (ctx.session.waitingForPost || ctx.session.waitingForAIPrompt) {
+    return handleNewPost(ctx);
+  }
 });
+newPostCallbackHandlers(bot);
 
 bot.callbackQuery(/^setLang:(uz|ru)$/, setLanguageCB);
 bot.callbackQuery("buy_stars_menu", buyStarsMenu);
@@ -89,13 +107,13 @@ bot.callbackQuery(/buy_premium_gift_(\d+)/, buyPremiumGiftDetail);
 
 bot.callbackQuery(/buy_premium_profile_(\d+)/, buyPremiumProfileDetail);
 
-// bot.on("message:photo", async (ctx) => {
-//   const photos = ctx.message.photo;
-//   const fileId = photos[photos.length - 1].file_id; // eng sifatli (oxirgi) variantni oladi
-//   console.log("File ID:", fileId);
+bot.on("message:photo", async (ctx) => {
+  const photos = ctx.message.photo;
+  const fileId = photos[photos.length - 1].file_id; // eng sifatli (oxirgi) variantni oladi
+  console.log("File ID:", fileId);
 
-//   await ctx.reply(`Siz yuborgan rasm file_id: ${fileId}`);
-// });
+  await ctx.reply(`Siz yuborgan rasm file_id: ${fileId}`);
+});
 bot.on("message:photo", async (ctx) => {
   if (ctx.session.state !== "awaiting_check") return;
 
@@ -178,7 +196,7 @@ bot.callbackQuery("back", async (ctx) => {
     {
       type: "photo",
       media:
-        "AgACAgIAAxkBAAMFaN6wzPx0gbDumI73fsq_bPXTa7AAAvf6MRvfA_lKGxrq7pILe9UBAAMCAAN5AAM2BA",
+        "AgACAgIAAxkBAAP1aOOhxDscy0MiN-AYw7WUOyqdWhQAApr9MRsXrCFLHt4kfjFlX7kBAAMCAAN5AAM2BA",
       caption: `👋 <b>Hurmatli</b> <a href="tg://user?id=${ctx.from?.id}">${safeName}</a>!\n\n<b>Botimizning bosh menyusiga xush kelibsiz!</b>\n\nBu yerda siz barcha imkoniyatlarni qulay va tezkor tarzda topasiz:\n<blockquote>⭐️ <b>Premium xizmatlar</b>\n💳 <b>To‘lovlar va sovg‘alar</b>\n📢 <b>Yangiliklar va qo‘llab-quvvatlash</b></blockquote>\n\n<i>Biz siz uchun hammasini soddalashtirdik — endi faqat menyudan kerakli bo‘limni tanlashingiz kifoya.</i> 🚀\n\n<b>⬇️ Quyidagi tugmalardan foydalaning ⬇️</b>`,
       parse_mode: "HTML",
     },
@@ -195,8 +213,14 @@ async function startBot() {
   try {
     console.log("MongoDB ulanda Va Bot ishlamoqda!");
     await mongoose.connect(process.env.MONGODB_URI!);
-    bot.start();
-    console.log("✅ MongoDB ulandi va bot ishga tushdi");
+
+    // grammY runner'dan foydalanib parallel ishlov berish
+    const handle: RunnerHandle = run(bot);
+    console.log("✅ MongoDB ulandi va bot parallel runner bilan ishga tushdi");
+
+    // Graceful stop uchun signal handlers (optimizatsiya uchun)
+    process.once("SIGINT", () => handle.stop());
+    process.once("SIGTERM", () => handle.stop());
   } catch (error) {
     console.error("❌ Bot ishga tushirishda xatolik:", error);
   }

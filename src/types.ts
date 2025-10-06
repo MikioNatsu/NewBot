@@ -18,6 +18,8 @@ export interface SessionData {
     comment?: string;
     amount?: string;
   } | null;
+  waitingForPost?: boolean;
+  waitingForAIPrompt?: boolean;
 }
 
 export type MyContext = Context &
