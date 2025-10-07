@@ -6,7 +6,6 @@ const API_URL = process.env.SMM_API_URL!;
 const API_KEY = process.env.SMM_API_KEY!;
 const ADMIN_ID = process.env.ADMIN!;
 
-// 🔹 API ga POST so‘rov yuboruvchi helper
 async function smmRequest(params: Record<string, any>) {
   try {
     const payload = qs.stringify({ key: API_KEY, ...params });
@@ -30,7 +29,6 @@ async function smmRequest(params: Record<string, any>) {
   }
 }
 
-// 🔹 Adminni balans haqida xabardor qilish
 async function notifyAdminBalance(context: string) {
   try {
     const balanceInfo = await getBalance();
@@ -47,68 +45,66 @@ async function notifyAdminBalance(context: string) {
   }
 }
 
-// 🔹 Buyurtma qo‘shish
 export async function addOrder(
   serviceId: number,
   link: string,
   quantity: number,
   extra: Record<string, any> = {}
 ) {
+  // AddOrder dan oldin balansni tekshirish
+  const balanceInfo = await getBalance();
+  if (parseFloat(balanceInfo.balance) < quantity * 0.015) {
+    // Taxminiy narx hisobi (0.015 USD per star)
+    throw new Error("Balans yetarli emas! Buyurtma yuborilmadi.");
+  }
+
   const result = await smmRequest({
     action: "add",
     service: serviceId,
     link,
     quantity,
-    ...extra, // runs, interval, comments va hok.
+    ...extra,
   });
 
-  // ✅ Muvaffaqiyatli bo‘lsa balansni tekshiramiz
   await notifyAdminBalance("add");
 
   return result;
 }
 
-// 🔹 Buyurtma statusini olish
 export async function getOrderStatus(orderId: number) {
   return smmRequest({ action: "status", order: orderId });
 }
 
-// 🔹 Bir nechta order status
 export async function getMultiStatus(orderIds: number[]) {
   return smmRequest({ action: "status", orders: orderIds.join(",") });
 }
 
-// 🔹 Xizmatlar ro‘yxati
 export async function getServices() {
   return smmRequest({ action: "services" });
 }
 
-// 🔹 Balansni tekshirish
 export async function getBalance() {
-  return smmRequest({ action: "balance" });
+  const result = await smmRequest({ action: "balance" });
+  console.log("getBalance natijasi:", result);
+  return result;
 }
 
-// 🔹 Refill qilish
 export async function refillOrder(orderId: number) {
   return smmRequest({ action: "refill", order: orderId });
 }
 
-// 🔹 Ko‘p order refill
 export async function multiRefill(orderIds: number[]) {
   return smmRequest({ action: "refill", orders: orderIds.join(",") });
 }
 
-// 🔹 Refill status
 export async function refillStatus(refillId: number) {
   return smmRequest({ action: "refill_status", refill: refillId });
 }
 
-// 🔹 Ko‘p refill status
 export async function multiRefillStatus(refillIds: number[]) {
   return smmRequest({ action: "refill_status", refills: refillIds.join(",") });
 }
 
-// 🔹 Cancel orders
 export async function cancelOrders(orderIds: number[]) {
   return smmRequest({ action: "cancel", orders: orderIds.join(",") });
 }

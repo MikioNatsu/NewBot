@@ -26,7 +26,7 @@ export const profile = async (ctx: MyContext) => {
     {
       type: "photo",
       media:
-        "AgACAgIAAxkBAAMHaN6xFPCmDNi7tY6ekdGiLW2kXecAAvv6MRvfA_lKi4nnLPKepKMBAAMCAAN5AAM2BA",
+        "AgACAgIAAxkBAAIC0WjlJglL60bCPP-JSf5WbyL81cyVAALYAzIbz3YoS7qMuOh9XTJLAQADAgADeQADNgQ",
       caption: `
 📋 <b>Profil ma’lumotlari</b>
 ━━━━━━━━━━━━━━━

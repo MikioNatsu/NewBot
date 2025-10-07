@@ -12,13 +12,13 @@ export interface PremiumItem {
 export const stars: StarProduct[] = [
   { stars: 50, price: 11000 },
   { stars: 100, price: 21000 },
-  { stars: 250, price: 50000 },
-  { stars: 500, price: 96000 },
-  { stars: 1000, price: 190000 },
-  { stars: 2500, price: 479999 },
-  { stars: 5000, price: 938999 },
-  { stars: 10000, price: 1823999 },
-  { stars: 100000, price: 18499999 },
+  { stars: 250, price: 52000 },
+  { stars: 500, price: 99999 },
+  { stars: 1000, price: 196000 },
+  { stars: 2500, price: 489999 },
+  { stars: 5000, price: 969999 },
+  { stars: 10000, price: 1923999 },
+  { stars: 100000, price: 19199999 },
 ];
 
 export const premium: {

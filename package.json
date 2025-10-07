@@ -5,7 +5,12 @@
   "scripts": {
     "dev": "nodemon --watch src --ext ts,json --exec tsx src/index.ts",
     "build": "tsc",
-    "start:prod": "node dist/index.js"
+    "start:prod": "node dist/index.js",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "backup": "mkdir -p backup && docker run --rm -v starlink_data:/data -v $(pwd)/backup:/backup alpine tar czvf /backup/backup.tar.gz -C /data .",
+    "restore": "docker run --rm -v starlink_data:/data -v $(pwd)/backup:/backup alpine sh -c 'cd /data && tar xzvf /backup/backup.tar.gz --strip 1'"
   },
   "keywords": [],
   "author": "",

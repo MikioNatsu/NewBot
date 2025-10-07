@@ -1,14 +1,157 @@
 import { InlineKeyboard } from "grammy";
-import dotenv from "dotenv";
-import fetch from "node-fetch";
-import { MyContext } from "../types.js";
-import { premium, stars } from "../consts/product.js";
-
-dotenv.config();
+import { Order } from "../models/Order";
+import { getBalance } from "../services/smmService";
+import { MyContext } from "../types";
+import {
+  adminBackKeyboard,
+  adminKeyboard,
+  postMenuKeyboard,
+} from "../keyboards/AdminKeyboards";
+import { User } from "../models/User";
+import { premium, stars } from "../consts/product";
+import "dotenv/config";
+import { Donate } from "../models/Donate";
+import { bot } from "..";
 
 const ADMIN_ID = Number(process.env.ADMIN);
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY!;
 const CHANNEL_ID = process.env.CHECK_PAYMENT!;
+const POST_CHANNEL = process.env.POST_CHANNEL!;
+
+// 🔹 Admin bosh menyu
+export const adminCB = async (ctx: MyContext) => {
+  await ctx.reply(
+    "👨‍💻 <b>Admin Panelga xush kelibsiz!</b>\n\n" +
+      "Quyidagi funksiyalardan birini tanlang va boshqaring 🔧",
+    {
+      parse_mode: "HTML",
+      reply_markup: adminKeyboard,
+    }
+  );
+};
+
+export const postMenu = async (ctx: MyContext) => {
+  await ctx.editMessageText(
+    "📝 <b>Yangi post yaratish!</b>\n\n" +
+      "Quyidagi turdagi  postlardan birini tanlang 👇\n",
+    {
+      parse_mode: "HTML",
+      reply_markup: postMenuKeyboard,
+    }
+  );
+};
+
+// 🔹 Pending buyurtmalar
+export const admin_orders = async (ctx: MyContext) => {
+  const pendingOrders = await Order.find({ status: "pending" }).limit(10);
+  if (pendingOrders.length === 0) {
+    return ctx.editMessageText(
+      "❌ <b>Hozirda <i>pending</i> buyurtmalar yo‘q.</b>",
+      {
+        parse_mode: "HTML",
+        reply_markup: adminBackKeyboard,
+      }
+    );
+  }
+
+  let message = "📋 <b>So‘nggi Pending Buyurtmalar</b>\n\n";
+  pendingOrders.forEach((order, index) => {
+    message +=
+      `#${index + 1}\n🧾 <b>ID:</b> <code>${order._id}</code>\n` +
+      `⭐️ <b>Stars:</b> ${order.productId}\n` +
+      `👤 <b>Foydalanuvchi:</b> ${order.userId}\n` +
+      `📦 <b>Status:</b> <i>${order.status}</i>\n\n`;
+  });
+
+  await ctx.editMessageText(message, {
+    parse_mode: "HTML",
+    reply_markup: adminBackKeyboard,
+  });
+  await ctx.answerCallbackQuery();
+};
+
+// 🔹 Balans
+export const admin_balance = async (ctx: MyContext) => {
+  try {
+    const balance = await getBalance();
+    await ctx.editMessageText(
+      `💰 <b>Joriy balans:</b> <code>${balance.balance}</code> ${balance.currency}`,
+      {
+        parse_mode: "HTML",
+        reply_markup: adminBackKeyboard,
+      }
+    );
+  } catch (err) {
+    await ctx.editMessageText(
+      `❌ <b>Balansni olishda xatolik yuz berdi.</b>\n<i>${err}</i>`,
+      { parse_mode: "HTML" }
+    );
+  }
+  await ctx.answerCallbackQuery();
+};
+
+// 🔹 Retrying buyurtmalar
+export const admin_retries = async (ctx: MyContext) => {
+  const retryingOrders = await Order.find({ status: "retrying" });
+  if (retryingOrders.length === 0) {
+    return ctx.editMessageText("✅ <b>Hozirda retrying buyurtmalar yo‘q.</b>", {
+      parse_mode: "HTML",
+      reply_markup: adminBackKeyboard,
+    });
+  }
+
+  let message = "🔄 <b>Retrying Buyurtmalar</b>\n\n";
+  retryingOrders.forEach((order, index) => {
+    message +=
+      `#${index + 1}\n🧾 <b>ID:</b> <code>${order._id}</code>\n` +
+      `⭐️ <b>Stars:</b> ${order.productId}\n` +
+      `⏰ <b>Oxirgi tekshiruv:</b> ${
+        order.updatedAt?.toLocaleString() || "N/A"
+      }\n\n`;
+  });
+
+  await ctx.editMessageText(message, {
+    parse_mode: "HTML",
+    reply_markup: adminBackKeyboard,
+  });
+  await ctx.answerCallbackQuery();
+};
+
+// 🔹 Statistikalar
+export const admin_stats = async (ctx: MyContext) => {
+  const totalOrders = await Order.countDocuments();
+  const completed = await Order.countDocuments({ status: "completed" });
+  const retrying = await Order.countDocuments({ status: "retrying" });
+  const users = await User.distinct("telegramId").then((u) => u.length);
+  const balance = await getBalance();
+
+  const message =
+    "📊 <b>Umumiy Statistikalar</b>\n\n" +
+    `🧾 <b>Jami buyurtmalar:</b> ${totalOrders}\n` +
+    `✅ <b>Yakunlangan:</b> ${completed}\n` +
+    `🔁 <b>Retrying:</b> ${retrying}\n` +
+    `👥 <b>Foydalanuvchilar:</b> ${users}\n\n` +
+    `💰 <b>Balans:</b> <code>${balance.balance}</code> ${balance.currency}`;
+
+  await ctx.editMessageText(message, {
+    parse_mode: "HTML",
+    reply_markup: adminBackKeyboard,
+  });
+  await ctx.answerCallbackQuery();
+};
+
+// 🔹 Orqaga qaytish
+export const back_admin = async (ctx: MyContext) => {
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(
+    "👨‍💻 <b>Admin Panelga qaytdingiz!</b>\n\n" +
+      "Quyidagi bo‘limlardan birini tanlang 🔽",
+    {
+      parse_mode: "HTML",
+      reply_markup: adminKeyboard,
+    }
+  );
+};
 
 interface PendingPost {
   text: string;
@@ -25,9 +168,11 @@ export async function newPostCommand(ctx: MyContext) {
   const keyboard = new InlineKeyboard()
     .text("📝 O‘zim yozaman", "manual_post")
     .row()
-    .text("🤖 AI orqali yaratish", "ai_post");
+    .text("🤖 AI orqali yaratish", "ai_post")
+    .row()
+    .text("⬅️ Orqaga", "post_menu");
 
-  await ctx.reply("📰 Post yaratish usulini tanlang:", {
+  await ctx.editMessageText("📰 Post yaratish usulini tanlang:", {
     reply_markup: keyboard,
   });
 }
@@ -115,7 +260,7 @@ Misol:
 
 👇 Buyurtma berish:
 👉 <a href="https://t.me/YulduzBozorBot">@YulduzBozorBot</a>
-
+Do not use <br> tags; use \n for new lines instead. Make sure the text is valid for sendMessage
 Endi shu uslubda har safar yangi, jonli, kreativ va o‘zgacha post yarating.
 `,
             },
@@ -246,3 +391,90 @@ async function showPreview(ctx: MyContext, text: string) {
     reply_markup: keyboard,
   });
 }
+
+// Donater rank funksiyasi
+function getDonateRank(amount: number): string {
+  if (amount < 10000) return "😅 Bomj Donater";
+  if (amount < 50000) return "🪙 Yaxshi Donater";
+  if (amount < 100000) return "💎 Premium Donater";
+  if (amount < 500000) return "🔥 Super Donater";
+  if (amount < 1000000) return "👑 Legend Donater";
+  return "🌌 All-In Qahramon";
+}
+
+// Boshlash (faqat admin)
+export const postDonate = async (ctx: MyContext) => {
+  ctx.session.state = "awaiting_donate_user";
+  ctx.session.pendingDonate = {};
+  await ctx.editMessageText("👤 Donat kim tomonidan?", {
+    reply_markup: adminBackKeyboard,
+  });
+};
+
+// Step 1: User
+export const handleDonateUser = async (ctx: MyContext) => {
+  ctx.session.pendingDonate = { user: ctx.message?.text || "Noma’lum" };
+  ctx.session.state = "awaiting_donate_comment";
+  await ctx.reply("📝 Izoh kiriting:");
+};
+
+// Step 2: Comment
+export const handleDonateComment = async (ctx: MyContext) => {
+  ctx.session.pendingDonate = {
+    ...ctx.session.pendingDonate,
+    comment: ctx.message?.text || "-",
+  };
+  ctx.session.state = "awaiting_donate_amount";
+  await ctx.reply("💵 Summani kiriting (so‘mda):");
+};
+
+// Step 3: Amount + Send to channel + Save to DB
+export const handleDonateAmount = async (ctx: MyContext) => {
+  const amountNum = Number(ctx.message?.text || "0");
+  const { user, comment } = ctx.session.pendingDonate!;
+
+  const rank = getDonateRank(amountNum);
+
+  // 📌 DB ga yozamiz
+  await Donate.create({
+    user,
+    comment,
+    amount: amountNum,
+    createdAt: new Date(),
+  });
+
+  await ctx.api.sendMessage(
+    POST_CHANNEL,
+    `✨ <b>Yangi Donat Qabul Qilindi!</b> ✨
+
+👤 <b>Kim tomonidan:</b> ${user}
+💵 <b>Summasi:</b> <code>${amountNum.toLocaleString("uz-UZ")} so‘m</code>
+📝 <b>Izoh:</b> ${comment || "—"}
+📅 <b>Sana:</b> ${new Date().toLocaleString("uz-UZ")}
+
+🏆 <b>Daraja:</b> ${rank}`,
+    {
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "📊 Statistika",
+              url: `https://t.me/${
+                (
+                  await bot.api.getMe()
+                ).username
+              }?start=donatestats`,
+            },
+          ],
+        ],
+      },
+    }
+  );
+
+  await ctx.reply("✅ Donat xabari kanalga yuborildi!");
+
+  // reset session
+  ctx.session.state = null;
+  ctx.session.pendingDonate = null;
+};

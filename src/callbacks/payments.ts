@@ -3,15 +3,15 @@ import { Order } from "../models/Order";
 import { InlineKeyboard } from "grammy";
 import { User } from "../models/User";
 import { escapeHTML } from "../utils/escapeHTML";
-import { addOrder } from "../services/smmService"; // 🔹 API ulash
+import { addOrder, getBalance } from "../services/smmService";
 import * as dotenv from "dotenv";
 
 dotenv.config();
 
 const CHANNEL_ID = process.env.CHECK_PAYMENT as string;
 const REVIEW_CHANNEL = process.env.CHANNEL_IDS as string;
+const ADMIN_ID = process.env.ADMIN as string;
 
-// 🔹 Umumiy helper
 async function handlePaymentUpdate(
   ctx: MyContext,
   orderId: string,
@@ -38,93 +38,132 @@ async function handlePaymentUpdate(
     const statusText =
       status === "confirmed" ? "✅ Tasdiqlangan" : "🚫 Rad etilgan";
 
-    // 🔹 Kanaldagi xabarni yangilash
     if (order.channelMessageId) {
-      await ctx.api.editMessageCaption(CHANNEL_ID, order.channelMessageId, {
-        caption:
+      try {
+        await ctx.api.editMessageCaption(CHANNEL_ID, order.channelMessageId, {
+          caption:
+            `🧾 Buyurtma tekshirildi!\n\n👤 User: ${buyerLink}\n` +
+            `⭐️ Stars: ${order.productId}\n💵 Narx: ${order.price} so‘m\n` +
+            `💲 USD: ${order.productId * 0.015}\n` +
+            `📅 ${new Date().toLocaleString("uz-UZ")}\n` +
+            `📌 Holati: ${statusText}`,
+          parse_mode: "HTML",
+        });
+      } catch (err) {
+        console.error(`editMessageCaption xatosi (Order #${order._id}):`, err);
+        await ctx.api.sendMessage(
+          ADMIN_ID,
+          `⚠️ editMessageCaption xatosi: Order #${order._id}\nXato: ${err}`
+        );
+        await ctx.api.sendMessage(
+          CHANNEL_ID,
           `🧾 Buyurtma tekshirildi!\n\n👤 User: ${buyerLink}\n` +
+            `⭐️ Stars: ${order.productId}\n💵 Narx: ${order.price} so‘m\n` +
+            `💲 USD: ${order.productId * 0.015}\n` +
+            `📅 ${new Date().toLocaleString("uz-UZ")}\n` +
+            `📌 Holati: ${statusText}`,
+          { parse_mode: "HTML" }
+        );
+      }
+    } else {
+      console.warn(`Order ${order._id} uchun channelMessageId topilmadi`);
+      await ctx.api.sendMessage(
+        ADMIN_ID,
+        `⚠️ Order #${order._id} uchun channelMessageId topilmadi`
+      );
+      await ctx.api.sendMessage(
+        CHANNEL_ID,
+        `🧾 Buyurtma tekshirildi!\n\n👤 User: ${buyerLink}\n` +
           `⭐️ Stars: ${order.productId}\n💵 Narx: ${order.price} so‘m\n` +
           `💲 USD: ${order.productId * 0.015}\n` +
           `📅 ${new Date().toLocaleString("uz-UZ")}\n` +
           `📌 Holati: ${statusText}`,
-        parse_mode: "HTML",
-      });
+        { parse_mode: "HTML" }
+      );
     }
 
-    // 🔹 Tasdiqlangan bo‘lsa
     if (status === "confirmed") {
-      const totalConfirmed = await Order.countDocuments({
-        status: "confirmed",
-      });
-
-      // ✅ API ga yuborish
       try {
+        // API ga yuborishdan oldin balansni tekshirish
+        const balanceInfo = await getBalance();
+        const requiredBalance = order.productId * 0.015;
+        if (parseFloat(balanceInfo.balance) < requiredBalance) {
+          await ctx.api.sendMessage(
+            ADMIN_ID,
+            `⚠️ Balans yetarli emas! Buyurtma #${orderId} yuborilmadi. Balans: ${balanceInfo.balance} USD, kerak: ${requiredBalance} USD`
+          );
+          await ctx.api.sendMessage(
+            order.userId,
+            `❌ Servisda xatolik yuz berdi, tez orada hisobingiz to'ldiriladi.`
+          );
+          order.status = "retrying";
+          order.lastCheck = new Date();
+          await order.save();
+          return ctx.answerCallbackQuery({
+            text: "❌ Xatolik yuz berdi! Retrying ga o'tkazildi.",
+          });
+        }
+
         const apiRes = await addOrder(
-          Number(467), // productId = serviceId
-          buyer?.username ? `@${buyer.username}` : `${buyer?.telegramId}`, // link
-          order.productId || 1
+          467,
+          buyer?.username ? `@${buyer.username}` : `${buyer?.telegramId}`,
+          order.productId
         );
 
         console.log("✅ SMM API javobi:", apiRes);
 
-        // API orderId bazaga saqlash
         if (apiRes.order) {
           order.apiOrderId = apiRes.order;
+          order.lastCheck = new Date();
           await order.save();
+        } else {
+          throw new Error("API order ID topilmadi");
         }
+
+        await ctx.api.sendMessage(
+          order.userId,
+          `Buyurtmangiz tasdiqlandi, xizmatlar tez orada hisobingizga tushadi.`
+        );
+
+        const totalConfirmed = await Order.countDocuments({
+          status: "confirmed",
+        });
+
+        await ctx.api.sendMessage(
+          REVIEW_CHANNEL,
+          `✅ Buyurtma #N${totalConfirmed + 59}\n` +
+            `👤 Foydalanuvchi: ${safeName}\n` +
+            `⭐️ Stars: ${order.productId}\n` +
+            `💵 Narx: ${order.price} so‘m`,
+          { parse_mode: "HTML" }
+        );
       } catch (apiErr) {
         console.error("❌ API ga yuborishda xato:", apiErr);
         await ctx.api.sendMessage(
-          process.env.ADMIN!,
+          ADMIN_ID,
           `⚠️ API ga yuborishda xato!\n\nOrderID: ${orderId}\nUser: ${buyerLink}\nXato: ${apiErr}`
         );
+        await ctx.api.sendMessage(
+          order.userId,
+          `❌ Servisda xatolik yuz berdi, tez orada hisobingiz to'ldiriladi.`
+        );
+        order.status = "retrying";
+        order.lastCheck = new Date();
+        await order.save();
       }
-
-      // ✅ REVIEW kanaliga chiqishi
-      await ctx.api.sendMessage(
-        REVIEW_CHANNEL,
-        `✅ Buyurtma (TEST): #N${totalConfirmed + 47}\n` +
-          `👤 Foydalanuvchi: ${safeName}\n` +
-          `⭐️ Stars: ${order.productId}\n` +
-          `💵 Narx: ${order.price} so‘m`,
-        { parse_mode: "HTML" }
-      );
-
-      // ✅ Foydalanuvchiga xabar
-      await ctx.api.sendMessage(
-        order.userId,
-        `━━━━━━━━━━━━━━━
-✅ 𝗕𝘂𝘆𝘂𝗿𝘁𝗺𝗮 𝘁𝗮𝘀𝗱𝗶𝗾𝗹𝗮𝗻𝗱𝗶!
-━━━━━━━━━━━━━━━
-
-🔖 Buyurtma raqami: #${orderId}  
-⏳ Xizmatlaringiz 2 daqiqa ichida hisobingizga tushadi.  
-
-🎉 Rahmat, bizni tanlaganingiz uchun!`
-      );
 
       return ctx.answerCallbackQuery({ text: "✅ Buyurtma tasdiqlandi" });
     }
 
-    // 🔹 Rad etilgan bo‘lsa
-    await ctx.api.sendMessage(
-      order.userId,
-      `━━━━━━━━━━━━━━━
-❌ 𝗕𝘂𝘆𝘂𝗿𝘁𝗺𝗮 𝗿𝗮𝗱 𝗲𝘁𝗶𝗹𝗱𝗶!
-━━━━━━━━━━━━━━━
-
-🔖 Buyurtma raqami: #${orderId}  
-❗️ Sabab: To‘lov tasdiqlanmadi yoki noto‘g‘ri chek yuborildi.  
-
-🔄 Iltimos, to‘lovni qaytadan amalga oshiring.`,
-      {
-        reply_markup: new InlineKeyboard().text("🏠 Menyu", "back"),
-      }
-    );
+    // Denied uchun oddiy xabar, retry yo'q
+    await ctx.api.sendMessage(order.userId, `❌ So‘rovingiz qabul qilinmadi.`, {
+      reply_markup: new InlineKeyboard().text("🏠 Menyu", "back"),
+    });
 
     return ctx.answerCallbackQuery({ text: "❌ Buyurtma rad etildi!" });
   } catch (error) {
     console.error("Payment update error:", error);
+    await ctx.api.sendMessage(ADMIN_ID, `⚠️ Payment update xatosi: ${error}`);
     return ctx.answerCallbackQuery({
       text: "❌ Xatolik yuz berdi",
       show_alert: true,
@@ -132,7 +171,6 @@ async function handlePaymentUpdate(
   }
 }
 
-// 🔹 Callback handlerlar
 export const confirmPayment = async (ctx: MyContext) => {
   if (!ctx.match)
     return ctx.answerCallbackQuery({

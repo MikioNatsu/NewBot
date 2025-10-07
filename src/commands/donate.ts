@@ -4,7 +4,7 @@ import { MyContext } from "../types";
 const donateContent = {
   type: "photo" as const,
   media:
-    "AgACAgIAAxkBAAMJaN6xNC03nKEhyenhwr24GfQ11z8AAv36MRvfA_lKcngzNwlbM2UBAAMCAAN5AAM2BA",
+    "AgACAgIAAxkBAAIC1WjlKhaGKh1QHh4d7V5XBcVJjgLTAAIDBDIbz3YoS7q0m-_yrlDnAQADAgADeQADNgQ",
   caption: `
 <b>💎 Donat qilish</b>
 
@@ -15,7 +15,6 @@ Sizning har bir yordamingiz biz uchun muhim! ❤️
 
 <b>To‘lov usullari:</b>
 ▫️ <b><a href="https://tirikchilik.uz/MikioNatsu">Tirikchilik.uz</a></b> orqali to‘lov  
-▫️ Kartaga to‘lov
   `,
   parse_mode: "HTML" as const,
 };

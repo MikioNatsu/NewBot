@@ -54,7 +54,7 @@ export const start = async (ctx: MyContext) => {
     const existingUser = await User.findOne({ telegramId: id });
     if (existingUser) {
       return ctx.replyWithPhoto(
-        `AgACAgIAAxkBAAMFaN6wzPx0gbDumI73fsq_bPXTa7AAAvf6MRvfA_lKGxrq7pILe9UBAAMCAAN5AAM2BA`,
+        `AgACAgIAAxkBAAICzWjlJLwl4ehGc8FBhSiAswl8uuwZAALSAzIbz3YoS4_i77etvEPfAQADAgADeQADNgQ`,
         {
           caption: `👋 <b>Hurmatli </b>\<b><a href="tg://user?id=${ctx.from?.id}">${safeName}</a>!</b>\n\n<b>Botimizning bosh menyusiga xush kelibsiz!</b>\n\nBu yerda siz barcha imkoniyatlarni qulay va tezkor tarzda topasiz:\n<blockquote>⭐️ <b>Premium xizmatlar</b>\n💳 <b>To‘lovlar va sovg‘alar</b>\n📢 <b>Yangiliklar va qo‘llab-quvvatlash</b></blockquote>\n\n<i>Biz siz uchun hammasini soddalashtirdik — endi faqat menyudan kerakli bo‘limni tanlashingiz kifoya.</i> 🚀\n\n<b>⬇️ Quyidagi tugmalardan foydalaning ⬇️</b>`,
           reply_markup: mainKeyboard,
@@ -71,7 +71,7 @@ export const start = async (ctx: MyContext) => {
     await newUser.save();
 
     return ctx.replyWithPhoto(
-      `AgACAgIAAxkBAAMFaN6wzPx0gbDumI73fsq_bPXTa7AAAvf6MRvfA_lKGxrq7pILe9UBAAMCAAN5AAM2BA`,
+      `AgACAgIAAxkBAAICzWjlJLwl4ehGc8FBhSiAswl8uuwZAALSAzIbz3YoS4_i77etvEPfAQADAgADeQADNgQ`,
       {
         caption: `<b>🎉 Botimizga xush kelibsiz, <a href="tg://user?id=${ctx.from?.id}">${safeName}</a>!\n\nSizni oramizda ko‘rganimizdan mamnunmiz. 🚀\n\nBu yerda siz:\n<blockquote>⭐️ Premium xizmatlardan foydalanishingiz\n💳 To‘lovlarni qulay amalga oshirishingiz\n🎁 Sovg‘alar va maxsus takliflarni qo‘lga kiritishingiz\n📢 Eng so‘nggi yangiliklardan xabardor bo‘lishingiz mumkin.</blockquote>\n\n<i>Biz ishonamizki, siz bizning doimiy va qadrlangan haridorimizga aylanasiz!</i> 💙\n\n⬇️ Quyidagi tugmalardan foydalanib, o‘zingizga kerakli bo‘limni tanlang ⬇️ </b>`,
         reply_markup: mainKeyboard,
