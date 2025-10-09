@@ -28,6 +28,8 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=rootpassword
     ports:
       - "27017:27017"
+    volumes:
+      - bot_mongodb_data:/data/db   # ✅ shu qator muhim
     networks:
       - app-network
 
@@ -35,3 +37,6 @@ networks:
   app-network:
     driver: bridge
 
+volumes:
+  bot_mongodb_data:                # ✅ bu ham kerak
+    name: bot_mongodb_data

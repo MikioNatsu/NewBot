@@ -2,12 +2,15 @@ import "dotenv/config";
 import { Bot, InlineKeyboard, session } from "grammy";
 import mongoose from "mongoose";
 import { hydrate } from "@grammyjs/hydrate";
-import { run, RunnerHandle } from "@grammyjs/runner"; // Parallel ishlov berish uchun qo'shdim
+import { run, RunnerHandle } from "@grammyjs/runner";
 import { MyContext, SessionData } from "./types";
 import { start } from "./commands/start";
+import { referralHandler } from "./commands/referral";
 import { profile } from "./callbacks/profile";
 import { confirmPayment, denyPayment } from "./callbacks/payments";
 import { Order } from "./models/Order";
+import { Referral } from "./models/Referral";
+import { SubscriptionChannel } from "./models/SubscriptionChannel";
 import { buyStarsDetail, buyStarsMenu } from "./callbacks/stars";
 import { history } from "./callbacks/history";
 import { mainKeyboard } from "./keyboards/UserKeyboards";
@@ -20,10 +23,15 @@ import {
 } from "./callbacks/premium";
 import { donate, donateCB } from "./commands/donate";
 import { setLanguageCB } from "./callbacks/lang";
-
 import { escapeHTML } from "./utils/escapeHTML";
 import { CHECK_INTERVAL, checkPendingOrders } from "./jobs/checkOrders";
 import { isAdmin } from "./middlewares/admin";
+import { addReferral, recordOrder } from "./services/referralService";
+import {
+  checkSubscription,
+  getSubscriptionButtons,
+  getSubscriptionMessage,
+} from "./utils/checkSubscription";
 import {
   admin_balance,
   admin_orders,
@@ -39,7 +47,11 @@ import {
   newPostCommand,
   postDonate,
   postMenu,
+  manageSubscriptions,
+  addChannel,
+  deleteChannel,
 } from "./callbacks/admin";
+import { back } from "./callbacks/back";
 
 const BOT_API_TOKEN = process.env.BOT_TOKEN!;
 
@@ -53,7 +65,12 @@ bot.use(session({ initial: initialSession }));
 bot.use(hydrate());
 
 bot.drop((ctx) => {
-  return !(ctx.message?.text || ctx.message?.photo || ctx.callbackQuery);
+  return !(
+    ctx.message?.text ||
+    ctx.message?.photo ||
+    ctx.callbackQuery ||
+    (ctx.message as any)?.forward_from_chat
+  );
 });
 
 bot.api.setMyCommands([
@@ -62,14 +79,31 @@ bot.api.setMyCommands([
     command: "donat",
     description: "Bizni qo‘llab-quvvatlash orqali donat qilish",
   },
+  { command: "stats", description: "Referral statistikasini ko'rish" },
 ]);
-bot.command("start", start);
-bot.command("donat", donate);
 
+bot.command("start", async (ctx) => {
+  const isSubscribed = await checkSubscription(ctx);
+  if (!isSubscribed) {
+    return ctx.reply(
+      `⚠️ Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling:\n${await getSubscriptionMessage()}`,
+      {
+        reply_markup: await getSubscriptionButtons(),
+      }
+    );
+  }
+
+  const payload = ctx.match as string | undefined;
+  if (payload && payload !== "donatestats") {
+    await addReferral(ctx.from!.id.toString(), payload);
+  }
+  await start(ctx);
+});
+bot.command("donat", donate);
+bot.command(["stats"], referralHandler);
 bot.command("admin", isAdmin, adminCB);
 
 bot.on("message:text", async (ctx) => {
-  // 🔹 Donat bilan bog‘liq holatlar
   if (ctx.session.state === "awaiting_donate_user") {
     return handleDonateUser(ctx);
   }
@@ -79,31 +113,36 @@ bot.on("message:text", async (ctx) => {
   if (ctx.session.state === "awaiting_donate_amount") {
     return handleDonateAmount(ctx);
   }
-
-  // 🔹 NewPost AI/Manual post holatlari
   if (ctx.session.waitingForPost || ctx.session.waitingForAIPrompt) {
     return handleNewPost(ctx);
   }
 });
+
 newPostCallbackHandlers(bot);
 
 bot.callbackQuery(/^setLang:(uz|ru)$/, setLanguageCB);
 bot.callbackQuery("buy_stars_menu", buyStarsMenu);
 bot.callbackQuery(/buy_stars_(\d+)/, buyStarsDetail);
-bot.callbackQuery(/confirm_(.+)/, confirmPayment);
+bot.callbackQuery(/confirm_(.+)/, async (ctx) => {
+  const orderId = ctx.match[1];
+  const order = await Order.findById(orderId);
+  if (order) {
+    await recordOrder(order.userId, order.productId, order.price);
+  }
+  await confirmPayment(ctx);
+});
 bot.callbackQuery(/deny_(.+)/, denyPayment);
 bot.callbackQuery("profile", profile);
 bot.callbackQuery("history", history);
 bot.callbackQuery("donate", donateCB);
+bot.callbackQuery(["referral_stats", "referral_top"], referralHandler);
 
-// Premium menyusi
 bot.callbackQuery("buy_premium_menu", buyPremiumMenu);
 bot.callbackQuery("buy_premium_gift", buyPremiumGift);
 bot.callbackQuery("buy_premium_profile", buyPremiumProfile);
 bot.callbackQuery(/buy_premium_gift_(\d+)/, buyPremiumGiftDetail);
 bot.callbackQuery(/buy_premium_profile_(\d+)/, buyPremiumProfileDetail);
 
-// Admin callbacks
 bot.callbackQuery("admin_orders", isAdmin, admin_orders);
 bot.callbackQuery("admin_balance", isAdmin, admin_balance);
 bot.callbackQuery("admin_retries", isAdmin, admin_retries);
@@ -112,12 +151,14 @@ bot.callbackQuery("admin_menu", isAdmin, back_admin);
 bot.callbackQuery("post_menu", postMenu);
 bot.callbackQuery("newpost", newPostCommand);
 bot.callbackQuery("donat_post", postDonate);
+bot.callbackQuery("manage_subscriptions", isAdmin, manageSubscriptions);
+bot.callbackQuery("add_channel", isAdmin, addChannel);
+bot.callbackQuery(/delete_channel_(.+)/, isAdmin, deleteChannel);
 
 // bot.on("message:photo", async (ctx) => {
 //   const photos = ctx.message.photo;
-//   const fileId = photos[photos.length - 1].file_id; // eng sifatli (oxirgi) variantni oladi
+//   const fileId = photos[photos.length - 1].file_id;
 //   console.log("File ID:", fileId);
-
 //   await ctx.reply(`Siz yuborgan rasm file_id: ${fileId}`);
 // });
 
@@ -132,11 +173,11 @@ bot.on("message:photo", async (ctx) => {
       `⚠️ Hurmatli <b>${escapeHTML(
         ctx.from?.first_name || "foydalanuvchi"
       )}</b>!\n\n` +
-        `Sizda <b>Telegram username</b> mavjud emas. 
+        `Sizda <b>Telegram username</b> mavjud emas.
 Chekni yuborishdan oldin <b>username</b> o‘rnatishingiz kerak.\n\n` +
         `🛠 Username – bu sizning profilingiz uchun unikal @(belgi) bilan boshlanuvchi nom (masalan, <code>@starlink_${
           Math.floor(Math.random() * 1000) + 1
-        }</code>). 
+        }</code>).
 U o‘rnatilgandan so‘ng bot orqali buyurtmalarni tezroq tasdiqlash mumkin bo‘ladi.`,
       {
         parse_mode: "HTML",
@@ -193,10 +234,10 @@ U o‘rnatilgandan so‘ng bot orqali buyurtmalarni tezroq tasdiqlash mumkin bo�
     await order.save();
 
     await ctx.reply(`━━━━━━━━━━━━━━━
-✅ 𝗖𝗵𝗲𝗸 𝗾𝗮𝗯𝘂𝗹 𝗾𝗶𝗹𝗶𝗻𝗱𝗶  
+✅ 𝗖𝗵𝗲𝗸 𝗾𝗮𝗯𝘂𝗹 𝗾𝗶𝗹𝗶𝗻𝗱𝗶
 ━━━━━━━━━━━━━━━
 
-👨‍💻 Administrator tomonidan tekshirilmoqda.  
+👨‍💻 Administrator tomonidan tekshirilmoqda.
 ⏳ Iltimos, biroz kuting – tez orada javob olasiz.
 `);
   } catch (err) {
@@ -212,23 +253,8 @@ U o‘rnatilgandan so‘ng bot orqali buyurtmalarni tezroq tasdiqlash mumkin bo�
   ctx.session.pendingProduct = null;
 });
 
-bot.callbackQuery("back", async (ctx) => {
-  await ctx.answerCallbackQuery({ text: "⏳ Iltimos, kuting..." });
-  const safeName = escapeHTML(ctx.from?.first_name || "Foydalanuvchi");
+bot.callbackQuery("back", back);
 
-  await ctx.editMessageMedia(
-    {
-      type: "photo",
-      media:
-        "AgACAgIAAxkBAAICzWjlJLwl4ehGc8FBhSiAswl8uuwZAALSAzIbz3YoS4_i77etvEPfAQADAgADeQADNgQ",
-      caption: `👋 <b>Hurmatli</b> <a href="tg://user?id=${ctx.from?.id}">${safeName}</a>!\n\n<b>Botimizning bosh menyusiga xush kelibsiz!</b>\n\nBu yerda siz barcha imkoniyatlarni qulay va tezkor tarzda topasiz:\n<blockquote>⭐️ <b>Premium xizmatlar</b>\n💳 <b>To‘lovlar va sovg‘alar</b>\n📢 <b>Yangiliklar va qo‘llab-quvvatlash</b></blockquote>\n\n<i>Biz siz uchun hammasini soddalashtirdik — endi faqat menyudan kerakli bo‘limni tanlashingiz kifoya.</i> 🚀\n\n<b>⬇️ Quyidagi tugmalardan foydalaning ⬇️</b>`,
-      parse_mode: "HTML",
-    },
-    {
-      reply_markup: mainKeyboard,
-    }
-  );
-});
 bot.catch((err) => {
   console.error(`Xatolik update ${err.ctx.update.update_id}:`, err.error);
 });
@@ -238,11 +264,9 @@ async function startBot() {
     console.log("MongoDB ulanda Va Bot ishlamoqda!");
     await mongoose.connect(process.env.MONGODB_URI!);
 
-    // grammY runner'dan foydalanish
     const handle: RunnerHandle = run(bot);
     console.log("✅ MongoDB ulandi va bot parallel runner bilan ishga tushdi");
 
-    // Graceful stop uchun signal handlers
     process.once("SIGINT", () => handle.stop());
     process.once("SIGTERM", () => handle.stop());
   } catch (error) {

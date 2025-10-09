@@ -22,7 +22,7 @@ export const start = async (ctx: MyContext) => {
     const progress = Math.min(1, current / goal);
     const filled = Math.round(progress * size);
     const empty = size - filled;
-    return "▓".repeat(filled) + "░".repeat(empty);
+    return "█".repeat(filled) + "▒".repeat(empty);
   }
 
   if (payload === "donatestats") {

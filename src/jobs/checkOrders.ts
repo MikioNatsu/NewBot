@@ -2,6 +2,7 @@ import { Order } from "../models/Order";
 import { getOrderStatus, addOrder, getBalance } from "../services/smmService";
 import { bot } from "../index";
 import { User } from "../models/User";
+import { escapeHTML } from "../utils/escapeHTML";
 
 const REVIEW_CHANNEL = process.env.CHANNEL_IDS!;
 const CHANNEL_LOG = process.env.CHANNEL_LOG!;
@@ -9,26 +10,19 @@ export const CHECK_INTERVAL = 10 * 1000;
 const RETRY_INTERVAL = 30 * 60 * 1000; // 30 daqiqa
 
 export async function checkPendingOrders() {
-  console.log("checkPendingOrders ishga tushdi");
   try {
     const confirmedOrders = await Order.find({
       status: "confirmed",
       apiOrderId: { $exists: true },
     });
-    console.log("Confirmed orders topildi:", confirmedOrders.length);
 
     for (const order of confirmedOrders) {
       if (!order.apiOrderId) {
-        console.log(
-          `Order #${order._id} da apiOrderId mavjud emas, o‘tkazib yuborildi`
-        );
         continue;
       }
-      console.log(`Tekshirilayotgan confirmed order: #${order._id}`);
       const res = await getOrderStatus(order.apiOrderId);
 
       if (!res || !res.status) {
-        console.log(`Order #${order._id} uchun status olingmadi`);
         continue;
       }
 
@@ -36,10 +30,17 @@ export async function checkPendingOrders() {
         order.status = "completed";
         order.lastCheck = new Date();
         await order.save();
-
+        const totalConfirmed = await Order.countDocuments({
+          status: "confirmed",
+        });
+        const buyer = await User.findOne({ telegramId: order.userId });
+        const safeName = escapeHTML(buyer?.firstName || "Foydalanuvchi");
         await bot.api.sendMessage(
           REVIEW_CHANNEL,
-          `✅ Buyurtma #${order._id} yakunlandi!\n⭐️ Stars: ${order.productId}`,
+          `✅ Buyurtma #N${totalConfirmed + 59}\n` +
+            `👤 Foydalanuvchi: ${safeName}\n` +
+            `⭐️ Stars: ${order.productId}\n` +
+            `💵 Narx: ${order.price} so‘m`,
           { parse_mode: "HTML" }
         );
 
@@ -61,30 +62,19 @@ export async function checkPendingOrders() {
 
     // Faqat retrying buyurtmalarni tekshirish
     const retryingOrders = await Order.find({ status: "retrying" });
-    console.log("Retrying orders found:", retryingOrders.length);
     for (const order of retryingOrders) {
-      console.log(
-        `Tekshirilayotgan retrying order: #${order._id}, userId: ${order.userId}`
-      );
       if (
         order.lastCheck &&
         Date.now() - order.lastCheck.getTime() < RETRY_INTERVAL
       ) {
-        console.log(
-          `Order #${order._id} hali 1 daqiqadan kam vaqt oldin tekshirilgan`
-        );
         continue;
       }
 
-      console.log(`Retrying order #${order._id} uchun jarayon boshlandi`);
       try {
         // Retrydan oldin balansni aniq tekshirish
         const balanceInfo = await getBalance();
-        console.log(`getBalance natijasi:`, balanceInfo);
         const requiredBalance = order.productId * 0.015;
-        console.log(
-          `Balans: ${balanceInfo.balance} USD, kerak: ${requiredBalance} USD`
-        );
+
         if (parseFloat(balanceInfo.balance) < requiredBalance) {
           console.error(
             `Balans yetarli emas: Buyurtma #${order._id} uchun ${requiredBalance} USD kerak, hozirda ${balanceInfo.balance} USD`
@@ -99,11 +89,7 @@ export async function checkPendingOrders() {
         }
         const user = await User.findOne({ telegramId: order.userId });
         const username = user?.username || `mikionatsu`;
-        console.log(
-          `addOrder chaqirilmoqda: serviceId=467, link=${
-            order.link || `@${username}`
-          }, quantity=${order.productId}`
-        );
+
         const retryRes = await addOrder(
           467,
           order.link || `@${username}`,
@@ -146,4 +132,3 @@ export async function checkPendingOrders() {
 }
 
 setInterval(checkPendingOrders, CHECK_INTERVAL);
-console.log("setInterval boshlandi");

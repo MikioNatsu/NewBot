@@ -7,6 +7,9 @@ export interface SessionData {
     | "awaiting_donate_user"
     | "awaiting_donate_comment"
     | "awaiting_donate_amount"
+    | "awaiting_channel_id"
+    | "awaiting_channel_name"
+    | "awaiting_channel_input"
     | null;
   currentOrderId: string | null;
   pendingProduct: {
@@ -20,6 +23,7 @@ export interface SessionData {
   } | null;
   waitingForPost?: boolean;
   waitingForAIPrompt?: boolean;
+  channelId?: string;
 }
 
 export type MyContext = Context &

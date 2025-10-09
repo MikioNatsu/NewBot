@@ -1,3 +1,4 @@
+// src/keyboards/AdminKeyboards.ts (mukammal yangilangan: logging tugmasi optional qo'shilgan)
 import { InlineKeyboard } from "grammy";
 
 export const adminKeyboard = new InlineKeyboard()
@@ -9,16 +10,17 @@ export const adminKeyboard = new InlineKeyboard()
   .text("🔄 Retrying buyurtmalar", "admin_retries")
   .text("📊 Statistikalar", "admin_stats")
   .row()
-  .text("🏠 Chiqish", "back");
-// Admin orders list
-
-export const postMenuKeyboard = new InlineKeyboard()
-  .text("AI POST", "newpost")
-  .text("DONAT POST", "donat_post")
+  .text("📢 Majburiy kanallarni boshqarish", "manage_subscriptions")
   .row()
-  .text("⬅️ Orqaga", "admin_menu");
+  .text("🏠 Chiqish", "back");
 
 export const adminBackKeyboard = new InlineKeyboard().text(
   "⬅️ Orqaga",
   "admin_menu"
 );
+
+export const postMenuKeyboard = new InlineKeyboard()
+  .text("🤖 AI POST", "ai_post")
+  .text("💸 DONAT POST", "donat_post")
+  .row()
+  .text("⬅️ Orqaga", "admin_menu");

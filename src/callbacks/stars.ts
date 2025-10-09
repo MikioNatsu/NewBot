@@ -108,7 +108,11 @@ export const buyStarsDetail = async (ctx: MyContext) => {
     caption: `💳 <b>To‘lov uchun karta:</b>\n<code>${card.replace(
       /(\d{4})(?=\d)/g,
       "$1 "
-    )}</code>\n\n⭐️ <b>Yulduzlar:</b> ${product.stars.toLocaleString("uz-UZ")}\n💵 <b>Narx:</b> ${product.price.toLocaleString("uz-UZ")} so‘m\n\n📸 <i>To‘lov qilganingizdan so‘ng chekni shu yerga yuboring.</i>`,
+    )}</code>\n\n⭐️ <b>Yulduzlar:</b> ${product.stars.toLocaleString(
+      "uz-UZ"
+    )}\n💵 <b>Narx:</b> ${product.price.toLocaleString(
+      "uz-UZ"
+    )} so‘m\n\n📸 <i>To‘lov qilganingizdan so‘ng chekni shu yerga yuboring.</i>`,
     parse_mode: "HTML",
     reply_markup: new InlineKeyboard().text("⬅️ Orqaga", "buy_stars_menu"),
   });

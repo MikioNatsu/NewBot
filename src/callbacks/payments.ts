@@ -41,12 +41,7 @@ async function handlePaymentUpdate(
     if (order.channelMessageId) {
       try {
         await ctx.api.editMessageCaption(CHANNEL_ID, order.channelMessageId, {
-          caption:
-            `🧾 Buyurtma tekshirildi!\n\n👤 User: ${buyerLink}\n` +
-            `⭐️ Stars: ${order.productId}\n💵 Narx: ${order.price} so‘m\n` +
-            `💲 USD: ${order.productId * 0.015}\n` +
-            `📅 ${new Date().toLocaleString("uz-UZ")}\n` +
-            `📌 Holati: ${statusText}`,
+          caption: `🧾Admin buyurtmangizni tasdiqladi!\n\n👤 User: ${buyerLink}\n\nBuyurtma ID:${order._id}`,
           parse_mode: "HTML",
         });
       } catch (err) {
