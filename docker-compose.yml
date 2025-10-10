@@ -1,9 +1,10 @@
+version: '3.8'
 services:
   bot:
     build: .
     container_name: telegram-bot
     environment:
-      - MONGODB_URI=mongodb://root:rootpassword@mongo:27017/telegram-bot?authSource=admin
+      - MONGODB_URI=mongodb://root:rootpassword@localhost:27017/telegram-bot?authSource=admin
       - BOT_TOKEN=8353947037:AAFws_MB0b95k2Pn-ZuD5XFCkMW12CA7-Lo
       - ADMIN=6076223538
       - CHECK_PAYMENT=-1003097441586
@@ -16,27 +17,28 @@ services:
       - "3000:3000"
     depends_on:
       - mongo
+    restart: unless-stopped
     networks:
       - app-network
-
   mongo:
-    image: mongo:4.4
+    image: mongo:4.4.29
     container_name: mongo
-    restart: always
+    restart: unless-stopped
     environment:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=rootpassword
     ports:
       - "27017:27017"
     volumes:
-      - bot_mongodb_data:/data/db   # ✅ shu qator muhim
+      - bot_mongodb_data:/data/db
+      - bot_mongodb_config:/data/configdb
     networks:
       - app-network
-
+volumes:
+  bot_mongodb_data:
+    name: bot_mongodb_data
+  bot_mongodb_config:
+    name: bot_mongodb_config
 networks:
   app-network:
     driver: bridge
-
-volumes:
-  bot_mongodb_data:                # ✅ bu ham kerak
-    name: bot_mongodb_data

@@ -6,11 +6,11 @@
     "dev": "nodemon --watch src --ext ts,json --exec tsx src/index.ts",
     "build": "tsc",
     "start:prod": "node dist/index.js",
-    "docker:up": "npm run restore && docker compose up -d",
-    "docker:down": "npm run backup && docker compose down",
     "docker:logs": "docker compose logs -f",
-    "backup": "mkdir -p backup && docker run --rm -v bot_mongodb_data:/data/db -v $(pwd)/backup:/backup alpine tar czvf /backup/backup.tar.gz -C /data/db .",
-    "restore": "docker run --rm -v bot_mongodb_data:/data/db -v $(pwd)/backup:/backup alpine sh -c 'cd /data/db && tar xzvf /backup/backup.tar.gz --strip 1'"
+    "docker:up": "npm run restore && docker compose up -d --build",
+    "docker:down": "npm run backup && docker compose down",
+    "backup": "mkdir -p ../backup && docker run --rm -v bot_mongodb_data:/data/db -v $(pwd)/../backup:/backup alpine tar czvf /backup/backup.tar.gz -C /data/db .",
+    "restore": "docker run --rm -v bot_mongodb_data:/data/db -v $(pwd)/../backup:/backup alpine sh -c 'cd /data/db && tar xzvf /backup/backup.tar.gz --strip 1'"
   },
   "keywords": [],
   "author": "",

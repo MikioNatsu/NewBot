@@ -38,7 +38,7 @@ export const history = async (ctx: MyContext) => {
         `🆔 *ID*: ${order._id}
 🛍 *Mahsulot*: ${order.productId}
 💵 *Narxi*: ${order.price} so'm
-🕒 *Sotib olingan vaqt*: ${order.createdAt.toLocaleString("uz-UZ")}
+🕒 *Sotib olingan vaqt*: ${order.createdAt!.toLocaleString("uz-UZ")}
 📌 *Holati*: ${
           order.status === "pending"
             ? "⏳ Kutilmoqda"
