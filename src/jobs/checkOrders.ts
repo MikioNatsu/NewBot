@@ -1,3 +1,4 @@
+// src/jobs/checkOrders.ts (unchanged, but ensuring no extra info in logs)
 import { Order } from "../models/Order";
 import { getOrderStatus, addOrder, getBalance } from "../services/smmService";
 import { bot } from "../index";

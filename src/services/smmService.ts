@@ -1,6 +1,7 @@
 import axios from "axios";
 import qs from "qs";
 import { bot } from "../index";
+import "dotenv/config";
 
 const API_URL = process.env.SMM_API_URL!;
 const API_KEY = process.env.SMM_API_KEY!;

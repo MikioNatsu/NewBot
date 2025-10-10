@@ -12,6 +12,7 @@ export interface IOrder extends Document {
   link?: string;
   createdAt?: Date;
   updatedAt?: Date;
+  isPurchase?: boolean;
 }
 
 const orderSchema = new Schema<IOrder>(
@@ -28,6 +29,7 @@ const orderSchema = new Schema<IOrder>(
     },
     channelMessageId: { type: Number },
     link: { type: String },
+    isPurchase: { type: Boolean, default: false },
   },
   {
     timestamps: true,

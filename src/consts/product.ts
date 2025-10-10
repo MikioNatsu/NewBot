@@ -1,3 +1,4 @@
+// src/consts/product.ts (updated prices)
 export interface StarProduct {
   stars: number;
   price: number;
@@ -14,11 +15,11 @@ export const stars: StarProduct[] = [
   { stars: 100, price: 21000 },
   { stars: 250, price: 52000 },
   { stars: 500, price: 99999 },
-  { stars: 1000, price: 196000 },
-  { stars: 2500, price: 489999 },
-  { stars: 5000, price: 969999 },
-  { stars: 10000, price: 1923999 },
-  { stars: 100000, price: 19199999 },
+  { stars: 1000, price: 196990 },
+  { stars: 2500, price: 492200 },
+  { stars: 5000, price: 984400 },
+  { stars: 10000, price: 1969000 },
+  { stars: 100000, price: 19688000 },
 ];
 
 export const premium: {

@@ -1,3 +1,4 @@
+// src/index.ts (updated: fix confirm_ callback to avoid catching confirm_purchase_)
 import mongoose from "mongoose";
 import { Bot, InlineKeyboard, session } from "grammy";
 import { hydrate } from "@grammyjs/hydrate";
@@ -26,7 +27,12 @@ import { setLanguageCB } from "./callbacks/lang";
 import { escapeHTML } from "./utils/escapeHTML";
 import { CHECK_INTERVAL, checkPendingOrders } from "./jobs/checkOrders";
 import { isAdmin } from "./middlewares/admin";
-import { addReferral, recordOrder } from "./services/referralService";
+import {
+  addReferral,
+  recordOrder,
+  initiatePurchase,
+  confirmPurchase,
+} from "./services/referralService";
 import {
   checkSubscription,
   getSubscriptionButtons,
@@ -64,6 +70,7 @@ function initialSession(): SessionData {
     state: null,
     currentOrderId: null,
     pendingProduct: null,
+    pendingPurchase: null,
     waitingForPost: false,
     waitingForAIPrompt: false,
   };
@@ -72,17 +79,15 @@ function initialSession(): SessionData {
 bot.use(session({ initial: initialSession }));
 bot.use(hydrate());
 
-// Drop irrelevant updates
 bot.drop((ctx) => {
   return !(
     ctx.message?.text ||
     ctx.message?.photo ||
     ctx.callbackQuery ||
-    (ctx.message as any)?.forward_from_chat
+    ctx.message?.forward_from_chat
   );
 });
 
-// Set bot commands
 bot.api.setMyCommands([
   { command: "start", description: "Botni ishga tushirish" },
   {
@@ -92,7 +97,6 @@ bot.api.setMyCommands([
   { command: "stats", description: "Referral statistikasini ko'rish" },
 ]);
 
-// Commands
 bot.command("start", async (ctx) => {
   const isSubscribed = await checkSubscription(ctx);
   if (!isSubscribed) {
@@ -112,7 +116,6 @@ bot.command("donat", donate);
 bot.command(["stats"], referralHandler);
 bot.command("admin", isAdmin, adminCB);
 
-// Text message handlers
 bot.on("message:text", async (ctx) => {
   if (ctx.session.state === "awaiting_donate_user") {
     return handleDonateUser(ctx);
@@ -126,27 +129,54 @@ bot.on("message:text", async (ctx) => {
   if (ctx.session.waitingForPost || ctx.session.waitingForAIPrompt) {
     return handleNewPost(ctx);
   }
+  if (ctx.session.state === "awaiting_purchase_amount") {
+    const amount = parseInt(ctx.message?.text || "0");
+    if (isNaN(amount) || amount <= 0) {
+      await ctx.reply(
+        "❌ Iltimos, to'g'ri stars miqdorini kiriting (masalan, 50)."
+      );
+      return;
+    }
+    await initiatePurchase(ctx, ctx.from!.id.toString(), amount);
+  }
 });
 
-// Callback handlers
 newPostCallbackHandlers(bot);
 
 bot.callbackQuery(/^setLang:(uz|ru)$/, setLanguageCB);
 bot.callbackQuery("buy_stars_menu", buyStarsMenu);
 bot.callbackQuery(/buy_stars_(\d+)/, buyStarsDetail);
-bot.callbackQuery(/confirm_(.+)/, async (ctx) => {
+bot.callbackQuery(/confirm_([0-9a-fA-F]{24})/, async (ctx) => {
   const orderId = ctx.match[1];
-  const order = await Order.findById(orderId);
-  if (order) {
-    await recordOrder(order.userId, order.productId, order.price);
+  try {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      await ctx.answerCallbackQuery({
+        text: "❌ Buyurtma topilmadi",
+        show_alert: true,
+      });
+      return;
+    }
+    if (!order.isPurchase) {
+      await recordOrder(order.userId, order.productId, order.price);
+    }
+    await confirmPayment(ctx);
+  } catch (error) {
+    console.error("Confirm callback error:", error);
+    await ctx.answerCallbackQuery({
+      text: "❌ Xato yuz berdi",
+      show_alert: true,
+    });
   }
-  await confirmPayment(ctx);
 });
-bot.callbackQuery(/deny_(.+)/, denyPayment);
+bot.callbackQuery(/deny_([0-9a-fA-F]{24})/, denyPayment);
 bot.callbackQuery("profile", profile);
 bot.callbackQuery("history", history);
 bot.callbackQuery("donate", donateCB);
-bot.callbackQuery(["referral_stats", "referral_top"], referralHandler);
+bot.callbackQuery(
+  ["referral_stats", "referral_top", "referral_back"],
+  referralHandler
+);
 bot.callbackQuery("buy_premium_menu", buyPremiumMenu);
 bot.callbackQuery("buy_premium_gift", buyPremiumGift);
 bot.callbackQuery("buy_premium_profile", buyPremiumProfile);
@@ -163,8 +193,22 @@ bot.callbackQuery("donat_post", postDonate);
 bot.callbackQuery("manage_subscriptions", isAdmin, manageSubscriptions);
 bot.callbackQuery("add_channel", isAdmin, addChannel);
 bot.callbackQuery(/delete_channel_(.+)/, isAdmin, deleteChannel);
+bot.callbackQuery("initiate_purchase", async (ctx) => {
+  await initiatePurchase(ctx, ctx.from!.id.toString());
+});
+bot.callbackQuery(/confirm_purchase_(\d+)/, async (ctx) => {
+  const starsToPurchase = parseInt(ctx.match[1]);
+  await confirmPurchase(ctx, ctx.from!.id.toString(), starsToPurchase);
+});
+bot.callbackQuery("cancel_purchase", async (ctx) => {
+  ctx.session.state = null;
+  ctx.session.pendingPurchase = null;
+  await ctx.reply("❌ Purchase bekor qilindi.", {
+    reply_markup: new InlineKeyboard().text("🏠 Menyu", "back"),
+  });
+  await ctx.answerCallbackQuery({ text: "Bekor qilindi" });
+});
 
-// Photo message handler
 bot.on("message:photo", async (ctx) => {
   if (ctx.session.state !== "awaiting_check") return;
 
@@ -217,7 +261,7 @@ bot.on("message:photo", async (ctx) => {
         `🧾 Yangi chek!\n\n👤 User: <a href="tg://user?id=${
           order.userId
         }">${escapeHTML(ctx.from?.first_name)}</a>\n` +
-        `⭐️ Stars: ${order.productId}\n💵 Narx: ${order.price.toLocaleString(
+        `⭐ Stars: ${order.productId}\n💵 Narx: ${order.price.toLocaleString(
           "uz-UZ"
         )} so‘m\n📅 ${new Date().toLocaleString("uz-UZ")}\n📌 *Holati*: ${
           order.status === "pending"
@@ -264,7 +308,7 @@ async function connectDB() {
       socketTimeoutMS: 45000,
       connectTimeoutMS: 10000,
       maxPoolSize: 10,
-    } as mongoose.mongo.MongoClientOptions); // BU YERDA CAST QO'SHILDIM - XATO TUZATILDI
+    } as mongoose.mongo.MongoClientOptions);
 
     console.log("MongoDB connected successfully");
   } catch (err) {
@@ -273,11 +317,9 @@ async function connectDB() {
   }
 }
 
-// Disable Mongoose buffering
 mongoose.set("bufferCommands", false);
 mongoose.set("bufferTimeoutMS", 20000);
 
-// Start bot
 async function startBot() {
   try {
     await connectDB();

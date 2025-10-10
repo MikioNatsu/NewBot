@@ -1,15 +1,13 @@
 import { InlineKeyboard } from "grammy";
 import { User } from "../models/User.js";
 import { MyContext } from "../types.js";
-import { Order } from "../models/Order.js";
+import { Referral } from "../models/Referral.js";
 
 export const profile = async (ctx: MyContext) => {
   const user = await User.findOne({ telegramId: ctx.from?.id });
 
   if (!user) {
-    return ctx.editMessageText(
-      "⚠️ Siz hali ro‘yxatdan o‘tmagansiz.\nIltimos, /start buyrug‘ini bosing."
-    );
+    return ctx.editMessageText("⚠️ Ro‘yxatdan o‘tmagansiz. /start");
   }
 
   const regisDate = user.createdAt.toLocaleDateString("uz-UZ", {
@@ -18,9 +16,15 @@ export const profile = async (ctx: MyContext) => {
     day: "numeric",
   });
 
+  const referral = await Referral.findOne({ userId: ctx.from?.id.toString() });
+  const totalStars = referral ? referral.totalStars : 0;
+  const starsDisplay = `⭐ Stars: ${totalStars.toFixed(1)}\n`;
+
   const profileKeyboard = new InlineKeyboard()
     .text("⬅️ Orqaga", "back")
-    .text("🗂 Tarix", "history");
+    .text("🗂 Tarix", "history")
+    .row()
+    .text("💸 Purchase", "initiate_purchase");
 
   return ctx.editMessageMedia(
     {
@@ -28,12 +32,12 @@ export const profile = async (ctx: MyContext) => {
       media:
         "AgACAgIAAxkBAAIC0WjlJglL60bCPP-JSf5WbyL81cyVAALYAzIbz3YoS7qMuOh9XTJLAQADAgADeQADNgQ",
       caption: `
-📋 <b>Profil ma’lumotlari</b>
-━━━━━━━━━━━━━━━
-👤 <b>Ism:</b> ${user.firstName}
-🔗 <b>Username:</b> @${user.username || "—"}
-📅 <b>Ro‘yxatdan o‘tgan sana:</b> ${regisDate}
-━━━━━━━━━━━━━━━
+📋 <b>Profil</b>
+───────────────
+👤 Ism: ${user.firstName}
+🔗 Username: @${user.username || "—"}
+📅 Sana: ${regisDate}
+${starsDisplay}───────────────
 `,
       parse_mode: "HTML",
     },

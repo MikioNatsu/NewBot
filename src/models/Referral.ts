@@ -1,17 +1,17 @@
-import { Schema, model, Document, Types } from "mongoose";
+import { Schema, model, Document } from "mongoose";
 
 export interface IReferral extends Document {
   userId: string;
   referrerId?: string;
-  referrals: string[];
+  referrals: { userId: string; referredAt: Date }[];
   orders: {
     userId: string;
     productId: number;
     price: number;
     createdAt: Date;
   }[];
-  bonusPercentage: number;
   totalEarnings: number;
+  totalStars: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,8 +19,13 @@ export interface IReferral extends Document {
 const referralSchema = new Schema<IReferral>(
   {
     userId: { type: String, required: true, unique: true },
-    referrerId: { type: String }, // Kim taklif qilgan bo'lsa
-    referrals: [{ type: String }], // Taklif qilingan foydalanuvchilar
+    referrerId: { type: String },
+    referrals: [
+      {
+        userId: { type: String, required: true },
+        referredAt: { type: Date, default: Date.now },
+      },
+    ],
     orders: [
       {
         userId: { type: String, required: true },
@@ -29,8 +34,8 @@ const referralSchema = new Schema<IReferral>(
         createdAt: { type: Date, default: Date.now },
       },
     ],
-    bonusPercentage: { type: Number, default: 0 }, // Bonus foizi (0-95%)
-    totalEarnings: { type: Number, default: 0 }, // Umumiy foyda (yashirin)
+    totalEarnings: { type: Number, default: 0 },
+    totalStars: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

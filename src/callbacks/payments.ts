@@ -1,7 +1,9 @@
+// src/callbacks/payments.ts
 import { MyContext } from "../types";
 import { Order } from "../models/Order";
 import { InlineKeyboard } from "grammy";
 import { User } from "../models/User";
+import { Referral } from "../models/Referral";
 import { escapeHTML } from "../utils/escapeHTML";
 import { addOrder, getBalance } from "../services/smmService";
 import * as dotenv from "dotenv";
@@ -40,21 +42,46 @@ async function handlePaymentUpdate(
 
     if (order.channelMessageId) {
       try {
-        await ctx.api.editMessageCaption(CHANNEL_ID, order.channelMessageId, {
-          caption: `🧾Admin buyurtmangizni tasdiqladi!\n\n👤 User: ${buyerLink}\n\nBuyurtma ID:${order._id}`,
-          parse_mode: "HTML",
-        });
+        if (order.isPurchase) {
+          // For purchase orders, use editMessageText since it's a text message
+          await ctx.api.editMessageText(
+            CHANNEL_ID,
+            order.channelMessageId,
+            `🧾 Purchase tekshirildi!\n\n` +
+              `👤 User: ${buyerLink}\n` +
+              `⭐ Stars: ${order.productId}\n` +
+              `📅 ${new Date().toLocaleString("uz-UZ")}\n` +
+              `📌 Holati: ${statusText}`,
+            {
+              parse_mode: "HTML",
+            }
+          );
+        } else {
+          // For regular orders, use editMessageCaption for photo messages
+          await ctx.api.editMessageCaption(CHANNEL_ID, order.channelMessageId, {
+            caption:
+              `🧾 Buyurtma tekshirildi!\n\n` +
+              `👤 User: ${buyerLink}\n` +
+              `⭐ Stars: ${order.productId}\n` +
+              `💵 Narx: ${order.price} so‘m\n` +
+              `📅 ${new Date().toLocaleString("uz-UZ")}\n` +
+              `📌 Holati: ${statusText}`,
+            parse_mode: "HTML",
+          });
+        }
       } catch (err) {
-        console.error(`editMessageCaption xatosi (Order #${order._id}):`, err);
+        console.error(`editMessage xatosi (Order #${order._id}):`, err);
         await ctx.api.sendMessage(
           ADMIN_ID,
-          `⚠️ editMessageCaption xatosi: Order #${order._id}\nXato: ${err}`
+          `⚠️ editMessage xatosi: Order #${order._id}\nXato: ${err}`
         );
+        // Fallback: send a new message
         await ctx.api.sendMessage(
           CHANNEL_ID,
-          `🧾 Buyurtma tekshirildi!\n\n👤 User: ${buyerLink}\n` +
-            `⭐️ Stars: ${order.productId}\n💵 Narx: ${order.price} so‘m\n` +
-            `💲 USD: ${order.productId * 0.015}\n` +
+          `🧾 ${order.isPurchase ? "Purchase" : "Buyurtma"} tekshirildi!\n\n` +
+            `👤 User: ${buyerLink}\n` +
+            `⭐ Stars: ${order.productId}\n` +
+            (order.isPurchase ? `` : `💵 Narx: ${order.price} so‘m\n`) +
             `📅 ${new Date().toLocaleString("uz-UZ")}\n` +
             `📌 Holati: ${statusText}`,
           { parse_mode: "HTML" }
@@ -64,13 +91,14 @@ async function handlePaymentUpdate(
       console.warn(`Order ${order._id} uchun channelMessageId topilmadi`);
       await ctx.api.sendMessage(
         ADMIN_ID,
-        `⚠️ Order #${order._id} uchun channelMessageId topilmadi`
+        `⚠️ Order ${order._id} uchun channelMessageId topilmadi`
       );
       await ctx.api.sendMessage(
         CHANNEL_ID,
-        `🧾 Buyurtma tekshirildi!\n\n👤 User: ${buyerLink}\n` +
-          `⭐️ Stars: ${order.productId}\n💵 Narx: ${order.price} so‘m\n` +
-          `💲 USD: ${order.productId * 0.015}\n` +
+        `🧾 ${order.isPurchase ? "Purchase" : "Buyurtma"} tekshirildi!\n\n` +
+          `👤 User: ${buyerLink}\n` +
+          `⭐ Stars: ${order.productId}\n` +
+          (order.isPurchase ? `` : `💵 Narx: ${order.price} so‘m\n`) +
           `📅 ${new Date().toLocaleString("uz-UZ")}\n` +
           `📌 Holati: ${statusText}`,
         { parse_mode: "HTML" }
@@ -79,13 +107,28 @@ async function handlePaymentUpdate(
 
     if (status === "confirmed") {
       try {
-        // API ga yuborishdan oldin balansni tekshirish
+        if (order.isPurchase) {
+          // Purchase uchun stars ayirish
+          const referral = await Referral.findOne({ userId: order.userId });
+          if (referral && referral.totalStars >= order.productId) {
+            referral.totalStars -= order.productId;
+            await referral.save();
+          } else {
+            throw new Error("Yetarli stars yo'q");
+          }
+        }
+
+        // API request for both purchase and regular orders
         const balanceInfo = await getBalance();
         const requiredBalance = order.productId * 0.015;
         if (parseFloat(balanceInfo.balance) < requiredBalance) {
           await ctx.api.sendMessage(
             ADMIN_ID,
-            `⚠️ Balans yetarli emas! Buyurtma #${orderId} yuborilmadi. Balans: ${balanceInfo.balance} USD, kerak: ${requiredBalance} USD`
+            `⚠️ Balans yetarli emas! ${
+              order.isPurchase ? "Purchase" : "Buyurtma"
+            } #${orderId} yuborilmadi. Balans: ${
+              balanceInfo.balance
+            } USD, kerak: ${requiredBalance} USD`
           );
           await ctx.api.sendMessage(
             order.userId,
@@ -117,40 +160,54 @@ async function handlePaymentUpdate(
 
         await ctx.api.sendMessage(
           order.userId,
-          `Buyurtmangiz tasdiqlandi, xizmatlar tez orada hisobingizga tushadi.`
+          `✅ ${
+            order.isPurchase
+              ? `${order.productId} stars purchase`
+              : "Buyurtmangiz"
+          } tasdiqlandi, xizmatlar tez orada hisobingizga tushadi.`
         );
 
-        const totalConfirmed = await Order.countDocuments({
-          status: "confirmed",
-        });
+        if (!order.isPurchase) {
+          const totalConfirmed = await Order.countDocuments({
+            status: "confirmed",
+          });
 
-        await ctx.api.sendMessage(
-          REVIEW_CHANNEL,
-          `✅ Buyurtma #N${totalConfirmed + 59}\n` +
-            `👤 Foydalanuvchi: ${safeName}\n` +
-            `⭐️ Stars: ${order.productId}\n` +
-            `💵 Narx: ${order.price} so‘m`,
-          { parse_mode: "HTML" }
-        );
+          await ctx.api.sendMessage(
+            REVIEW_CHANNEL,
+            `✅ Buyurtma #N${totalConfirmed + 59}\n` +
+              `👤 Foydalanuvchi: ${safeName}\n` +
+              `⭐ Stars: ${order.productId}\n` +
+              `💵 Narx: ${order.price} so‘m`,
+            { parse_mode: "HTML" }
+          );
+        }
+
+        return ctx.answerCallbackQuery({ text: "✅ Buyurtma tasdiqlandi" });
       } catch (apiErr) {
-        console.error("❌ API ga yuborishda xato:", apiErr);
+        console.error("❌ API yoki purchase xatosi:", apiErr);
         await ctx.api.sendMessage(
           ADMIN_ID,
-          `⚠️ API ga yuborishda xato!\n\nOrderID: ${orderId}\nUser: ${buyerLink}\nXato: ${apiErr}`
+          `⚠️ ${
+            order.isPurchase ? "Purchase" : "API"
+          } xatosi!\n\nOrderID: ${orderId}\nUser: ${buyerLink}\nXato: ${apiErr}`,
+          {
+            parse_mode: "HTML",
+          }
         );
         await ctx.api.sendMessage(
           order.userId,
-          `❌ Servisda xatolik yuz berdi, tez orada hisobingiz to'ldiriladi.`
+          `❌ Servisda xatolik yuz berdi. Keyinroq urinib ko'ring.`
         );
         order.status = "retrying";
         order.lastCheck = new Date();
         await order.save();
+        return ctx.answerCallbackQuery({
+          text: "❌ Xatolik yuz berdi",
+          show_alert: true,
+        });
       }
-
-      return ctx.answerCallbackQuery({ text: "✅ Buyurtma tasdiqlandi" });
     }
 
-    // Denied uchun oddiy xabar, retry yo'q
     await ctx.api.sendMessage(order.userId, `❌ So‘rovingiz qabul qilinmadi.`, {
       reply_markup: new InlineKeyboard().text("🏠 Menyu", "back"),
     });

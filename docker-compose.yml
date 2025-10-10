@@ -4,7 +4,7 @@ services:
     build: .
     container_name: telegram-bot
     environment:
-      - MONGODB_URI=mongodb://root:rootpassword@localhost:27017/telegram-bot?authSource=admin
+      - MONGODB_URI=mongodb://root:rootpassword@mongo:27017/telegram-bot?authSource=admin
       - BOT_TOKEN=8353947037:AAFws_MB0b95k2Pn-ZuD5XFCkMW12CA7-Lo
       - ADMIN=6076223538
       - CHECK_PAYMENT=-1003097441586
