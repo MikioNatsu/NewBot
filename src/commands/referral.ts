@@ -10,6 +10,12 @@ import {
 } from "../utils/checkSubscription";
 import { addReferral, showReferralEarnings } from "../services/referralService";
 
+const mainKeyboard = new InlineKeyboard()
+  .text("🔝 Top 10", "referral_top")
+  .text("🏠 Menyu", "back")
+  .row()
+  .text("📊 Yangilash", "referral_stats");
+
 export async function referralHandler(ctx: MyContext) {
   try {
     if (!ctx.from) return ctx.reply("⚠️ Telegram ID topilmadi.");
@@ -88,11 +94,6 @@ ${statsMessage}
     }
 
     if (data === "referral_back") {
-      const mainKeyboard = new InlineKeyboard()
-        .text("🔝 Top 10", "referral_top")
-        .row()
-        .text("📊 Yangilash", "referral_stats");
-
       try {
         await ctx.editMessageCaption({
           caption: mainMessage,
@@ -115,26 +116,16 @@ ${statsMessage}
         console.warn("O‘chirish xatolik:", err);
       }
 
-      const keyboard = new InlineKeyboard()
-        .text("🔝 Top 10", "referral_top")
-        .row()
-        .text("📊 Yangilash", "referral_stats");
-
       await ctx.replyWithPhoto(
         "AgACAgIAAxkBAAIEOmjmr1_gcQOwo5gBCQPnOdHVQLT2AAIu9zEbRTowS_2zuy4XOh51AQADAgADeQADNgQ",
         {
           caption: mainMessage,
           parse_mode: "HTML",
-          reply_markup: keyboard,
+          reply_markup: mainKeyboard,
         }
       );
       return;
     }
-
-    const mainKeyboard = new InlineKeyboard()
-      .text("🔝 Top 10", "referral_top")
-      .row()
-      .text("📊 Yangilash", "referral_stats");
 
     await ctx.replyWithPhoto(
       "AgACAgIAAxkBAAIEOmjmr1_gcQOwo5gBCQPnOdHVQLT2AAIu9zEbRTowS_2zuy4XOh51AQADAgADeQADNgQ",

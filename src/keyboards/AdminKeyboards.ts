@@ -1,7 +1,8 @@
-// src/keyboards/AdminKeyboards.ts (mukammal yangilangan: logging tugmasi optional qo'shilgan)
 import { InlineKeyboard } from "grammy";
 
 export const adminKeyboard = new InlineKeyboard()
+  .text("📢 Broadcast", "broadcast_menu")
+  .row()
   .text("↗️ Post yaratish", "post_menu")
   .row()
   .text("📋 Buyurtmalar ro'yxati", "admin_orders")

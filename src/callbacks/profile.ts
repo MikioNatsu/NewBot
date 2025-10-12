@@ -21,10 +21,10 @@ export const profile = async (ctx: MyContext) => {
   const starsDisplay = `⭐ Stars: ${totalStars.toFixed(1)}\n`;
 
   const profileKeyboard = new InlineKeyboard()
-    .text("⬅️ Orqaga", "back")
-    .text("🗂 Tarix", "history")
+    .text("💸 Yulduz chiqarish", "initiate_purchase")
     .row()
-    .text("💸 Purchase", "initiate_purchase");
+    .text("⬅️ Orqaga", "back")
+    .text("🗂 Tarix", "history");
 
   return ctx.editMessageMedia(
     {

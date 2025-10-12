@@ -30,6 +30,12 @@ export interface SessionData {
   waitingForPost?: boolean;
   waitingForAIPrompt?: boolean;
   channelId?: string;
+  waitingForBroadcastText?: boolean;
+  waitingForBroadcastAIPrompt?: boolean;
+  waitingForBroadcastPhoto?: boolean;
+  waitingForBroadcastVideo?: boolean;
+  waitingForBroadcastButton?: boolean;
+  waitingForBroadcastSchedule?: boolean;
 }
 
 interface ExtendedMessage extends Message {

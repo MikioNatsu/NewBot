@@ -1,4 +1,5 @@
-// src/consts/product.ts (updated prices)
+// src/consts/product.ts
+
 export interface StarProduct {
   stars: number;
   price: number;
@@ -10,16 +11,27 @@ export interface PremiumItem {
   month: number;
 }
 
+// --- Narxni hafta kuniga qarab moslashtirish funksiyasi ---
+function adjustPrice(price: number): number {
+  const today = new Date().getDay(); // 0 = Yakshanba, 6 = Shanba
+  const weekendMultiplier = 1.15;
+
+  if (today === 0 || today === 6) {
+    return Math.round(price * weekendMultiplier);
+  }
+  return price;
+}
+
 export const stars: StarProduct[] = [
-  { stars: 50, price: 11000 },
-  { stars: 100, price: 21000 },
-  { stars: 250, price: 52000 },
-  { stars: 500, price: 99999 },
-  { stars: 1000, price: 196990 },
-  { stars: 2500, price: 492200 },
-  { stars: 5000, price: 984400 },
-  { stars: 10000, price: 1969000 },
-  { stars: 100000, price: 19688000 },
+  { stars: 50, price: adjustPrice(11000) },
+  { stars: 100, price: adjustPrice(21000) },
+  { stars: 250, price: adjustPrice(52000) },
+  { stars: 500, price: adjustPrice(99999) },
+  { stars: 1000, price: adjustPrice(196990) },
+  { stars: 2500, price: adjustPrice(492200) },
+  { stars: 5000, price: adjustPrice(984400) },
+  { stars: 10000, price: adjustPrice(1969000) },
+  { stars: 100000, price: adjustPrice(19688000) },
 ];
 
 export const premium: {

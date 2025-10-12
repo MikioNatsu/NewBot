@@ -1,4 +1,3 @@
-// src/index.ts (updated: fix confirm_ callback to avoid catching confirm_purchase_)
 import mongoose from "mongoose";
 import { Bot, InlineKeyboard, session } from "grammy";
 import { hydrate } from "@grammyjs/hydrate";
@@ -58,6 +57,11 @@ import {
   deleteChannel,
 } from "./callbacks/admin";
 import { back } from "./callbacks/back";
+import {
+  broadcastCallbackHandlers,
+  handleBroadcastInput,
+  broadcastMenu,
+} from "./handlers/broadcastHandlers"; // Broadcast import qo'shildi
 
 dotenv.config();
 
@@ -73,6 +77,12 @@ function initialSession(): SessionData {
     pendingPurchase: null,
     waitingForPost: false,
     waitingForAIPrompt: false,
+    waitingForBroadcastText: false,
+    waitingForBroadcastAIPrompt: false,
+    waitingForBroadcastPhoto: false,
+    waitingForBroadcastVideo: false,
+    waitingForBroadcastButton: false,
+    waitingForBroadcastSchedule: false,
   };
 }
 
@@ -139,9 +149,11 @@ bot.on("message:text", async (ctx) => {
     }
     await initiatePurchase(ctx, ctx.from!.id.toString(), amount);
   }
+  await handleBroadcastInput(ctx); // Broadcast input handler qo'shildi
 });
 
 newPostCallbackHandlers(bot);
+broadcastCallbackHandlers(bot); // Broadcast callbacks qo'shildi
 
 bot.callbackQuery(/^setLang:(uz|ru)$/, setLanguageCB);
 bot.callbackQuery("buy_stars_menu", buyStarsMenu);
@@ -203,11 +215,12 @@ bot.callbackQuery(/confirm_purchase_(\d+)/, async (ctx) => {
 bot.callbackQuery("cancel_purchase", async (ctx) => {
   ctx.session.state = null;
   ctx.session.pendingPurchase = null;
-  await ctx.reply("❌ Purchase bekor qilindi.", {
+  await ctx.editMessageText("❌ Purchase bekor qilindi.", {
     reply_markup: new InlineKeyboard().text("🏠 Menyu", "back"),
   });
   await ctx.answerCallbackQuery({ text: "Bekor qilindi" });
 });
+bot.callbackQuery("broadcast_menu", broadcastMenu); // Broadcast menyusi qo'shildi
 
 bot.on("message:photo", async (ctx) => {
   if (ctx.session.state !== "awaiting_check") return;
