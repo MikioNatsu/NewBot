@@ -3,7 +3,7 @@ import { Bot, InlineKeyboard, session } from "grammy";
 import { hydrate } from "@grammyjs/hydrate";
 import { run, RunnerHandle } from "@grammyjs/runner";
 import dotenv from "dotenv";
-import { MyContext, SessionData } from "./types";
+import { AnswerCallbackQueryOptions, MyContext, SessionData } from "./types";
 import { start } from "./commands/start";
 import { referralHandler } from "./commands/referral";
 import { profile } from "./callbacks/profile";
@@ -28,9 +28,8 @@ import { CHECK_INTERVAL, checkPendingOrders } from "./jobs/checkOrders";
 import { isAdmin } from "./middlewares/admin";
 import {
   addReferral,
-  recordOrder,
-  initiatePurchase,
   confirmPurchase,
+  initiatePurchase,
 } from "./services/referralService";
 import {
   checkSubscription,
@@ -52,16 +51,13 @@ import {
   newPostCommand,
   postDonate,
   postMenu,
-  manageSubscriptions,
-  addChannel,
-  deleteChannel,
 } from "./callbacks/admin";
 import { back } from "./callbacks/back";
 import {
-  broadcastCallbackHandlers,
-  handleBroadcastInput,
-  broadcastMenu,
-} from "./handlers/broadcastHandlers"; // Broadcast import qo'shildi
+  addChannel,
+  deleteChannel,
+  manageSubscriptions,
+} from "./commands/admin/manageSubscribtion";
 
 dotenv.config();
 
@@ -77,12 +73,8 @@ function initialSession(): SessionData {
     pendingPurchase: null,
     waitingForPost: false,
     waitingForAIPrompt: false,
-    waitingForBroadcastText: false,
-    waitingForBroadcastAIPrompt: false,
-    waitingForBroadcastPhoto: false,
-    waitingForBroadcastVideo: false,
-    waitingForBroadcastButton: false,
-    waitingForBroadcastSchedule: false,
+    lastSubscriptionCheck: 0,
+    pendingReferrer: undefined,
   };
 }
 
@@ -107,21 +99,31 @@ bot.api.setMyCommands([
   { command: "stats", description: "Referral statistikasini ko'rish" },
 ]);
 
-bot.command("start", async (ctx) => {
+bot.use(async (ctx, next) => {
+  if (!ctx.from) return next();
+
+  const userId = ctx.from.id.toString();
+  if (userId === process.env.ADMIN) return next();
+
+  const allowed = [
+    ctx.message?.text?.startsWith("/start"),
+    ctx.callbackQuery?.data === "check_subscription",
+  ].some(Boolean);
+
+  if (allowed) return next();
+
   const isSubscribed = await checkSubscription(ctx);
   if (!isSubscribed) {
-    return ctx.reply(
-      `⚠️ Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling:\n${await getSubscriptionMessage()}`,
-      { reply_markup: await getSubscriptionButtons() }
-    );
+    await ctx.reply(await getSubscriptionMessage(), {
+      reply_markup: await getSubscriptionButtons(),
+    });
+    return;
   }
 
-  const payload = ctx.match as string | undefined;
-  if (payload && payload !== "donatestats") {
-    await addReferral(ctx.from!.id.toString(), payload);
-  }
-  await start(ctx);
+  await next();
 });
+
+bot.command("start", start);
 bot.command("donat", donate);
 bot.command(["stats"], referralHandler);
 bot.command("admin", isAdmin, adminCB);
@@ -136,9 +138,62 @@ bot.on("message:text", async (ctx) => {
   if (ctx.session.state === "awaiting_donate_amount") {
     return handleDonateAmount(ctx);
   }
-  if (ctx.session.waitingForPost || ctx.session.waitingForAIPrompt) {
-    return handleNewPost(ctx);
+  if (ctx.session.state === "awaiting_channel_input") {
+    const input = ctx.message.text.trim();
+
+    // faqat @username yoki -100ID formatlariga ruxsat
+    if (!/^(@\S+|-100\d+)$/.test(input)) {
+      return ctx.reply(
+        "❌ Noto‘g‘ri format!\nFaqat @username yoki -100XXXXXXXXX formatida yuboring.\n\nMasalan:\n@YulduzBozor\nyoki\n-1002229098897"
+      );
+    }
+
+    // foydalanuvchi username yoki ID kiritganini aniqlaymiz
+    const channelId = input;
+    const channelName = input;
+
+    try {
+      // 🔹 avval getChat orqali tekshiramiz
+      const chat = await bot.api.getChat(channelId);
+
+      if (!chat) throw new Error("Chat topilmadi");
+
+      // 🔹 botning o‘zi shu kanalda adminmi?
+      const me = await bot.api.getChatMember(
+        channelId,
+        (
+          await bot.api.getMe()
+        ).id
+      );
+
+      if (!["administrator", "creator"].includes(me.status)) {
+        return ctx.reply(
+          "⚠️ Bot kanalga qo‘shilgan, lekin administrator emas.\n" +
+            "Iltimos, botni admin qilib qo‘ying."
+        );
+      }
+
+      // 🔹 ma’lumotni bazaga yozamiz
+      await SubscriptionChannel.create({
+        channelId: chat.id.toString(),
+        channelName: chat.username ? `@${chat.username}` : chat.title || input,
+      });
+
+      await ctx.reply(
+        `✅ Kanal qo‘shildi: ${chat.title || chat.username || input}`
+      );
+      ctx.session.state = null;
+      await manageSubscriptions(ctx);
+    } catch (err) {
+      console.error("[DEBUG] Kanalni tekshirishda xato:", err);
+      await ctx.reply(
+        "❌ Xatolik: Kanal topilmadi yoki bot unga kira olmaydi.\n" +
+          "Iltimos, botni kanalga admin qilib qo‘ying va qayta urinib ko‘ring."
+      );
+    }
+    return;
   }
+
   if (ctx.session.state === "awaiting_purchase_amount") {
     const amount = parseInt(ctx.message?.text || "0");
     if (isNaN(amount) || amount <= 0) {
@@ -149,11 +204,10 @@ bot.on("message:text", async (ctx) => {
     }
     await initiatePurchase(ctx, ctx.from!.id.toString(), amount);
   }
-  await handleBroadcastInput(ctx); // Broadcast input handler qo'shildi
+  await handleNewPost(ctx);
 });
 
 newPostCallbackHandlers(bot);
-broadcastCallbackHandlers(bot); // Broadcast callbacks qo'shildi
 
 bot.callbackQuery(/^setLang:(uz|ru)$/, setLanguageCB);
 bot.callbackQuery("buy_stars_menu", buyStarsMenu);
@@ -168,9 +222,6 @@ bot.callbackQuery(/confirm_([0-9a-fA-F]{24})/, async (ctx) => {
         show_alert: true,
       });
       return;
-    }
-    if (!order.isPurchase) {
-      await recordOrder(order.userId, order.productId, order.price);
     }
     await confirmPayment(ctx);
   } catch (error) {
@@ -220,7 +271,31 @@ bot.callbackQuery("cancel_purchase", async (ctx) => {
   });
   await ctx.answerCallbackQuery({ text: "Bekor qilindi" });
 });
-bot.callbackQuery("broadcast_menu", broadcastMenu); // Broadcast menyusi qo'shildi
+
+bot.callbackQuery("check_subscription", async (ctx: MyContext) => {
+  const isSubscribed = await checkSubscription(ctx, { force: true });
+  console.log(
+    `[DEBUG] Inline button orqali qayta tekshirish: ${
+      isSubscribed ? "Obuna bo'lgan" : "Obuna bo'lmagan"
+    }`
+  );
+
+  if (isSubscribed) {
+    await ctx.answerCallbackQuery("✅ Obuna bo'ldingiz! /start ni bosing.");
+
+    await addReferral(
+      ctx.from!.id.toString(),
+      ctx.session.pendingReferrer ?? undefined
+    );
+    // Obuna bo'lganda avto referral trigger
+    console.log(`[DEBUG] Obuna status o'zgardi va referral trigger ishlatildi`);
+  } else {
+    await ctx.answerCallbackQuery({
+      text: "❌ Obuna hali bo'lmagan. Kanallarga obuna bo'ling va qayta bosing.",
+      show_alert: true,
+    } as AnswerCallbackQueryOptions);
+  }
+});
 
 bot.on("message:photo", async (ctx) => {
   if (ctx.session.state !== "awaiting_check") return;
@@ -308,12 +383,10 @@ bot.on("message:photo", async (ctx) => {
 
 bot.callbackQuery("back", back);
 
-// Error handling
 bot.catch((err) => {
   console.error(`Xatolik update ${err.ctx.update.update_id}:`, err.error);
 });
 
-// MongoDB connection
 async function connectDB() {
   try {
     await mongoose.connect(process.env.MONGODB_URI!, {

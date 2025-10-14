@@ -1,4 +1,4 @@
-// src/jobs/checkOrders.ts (unchanged, but ensuring no extra info in logs)
+// src/jobs/checkOrders.ts
 import { Order } from "../models/Order";
 import { getOrderStatus, addOrder, getBalance } from "../services/smmService";
 import { bot } from "../index";
@@ -40,14 +40,14 @@ export async function checkPendingOrders() {
           REVIEW_CHANNEL,
           `✅ Buyurtma #N${totalConfirmed + 59}\n` +
             `👤 Foydalanuvchi: ${safeName}\n` +
-            `⭐️ Stars: ${order.productId}\n` +
+            `⭐ Stars: ${order.productId}\n` +
             `💵 Narx: ${order.price} so‘m`,
           { parse_mode: "HTML" }
         );
 
         await bot.api.sendMessage(
           order.userId,
-          `🎉 Buyurtmangiz muvaffaqiyatli yakunlandi!\n⭐️ Sizning yulduzlaringiz hisobingizga tushirildi!`
+          `🎉 Buyurtmangiz muvaffaqiyatli yakunlandi!\n⭐ Sizning yulduzlaringiz hisobingizga tushirildi!`
         );
       } else if (res.status === "Canceled") {
         order.status = "retrying";
@@ -61,7 +61,6 @@ export async function checkPendingOrders() {
       }
     }
 
-    // Faqat retrying buyurtmalarni tekshirish
     const retryingOrders = await Order.find({ status: "retrying" });
     for (const order of retryingOrders) {
       if (
@@ -72,7 +71,6 @@ export async function checkPendingOrders() {
       }
 
       try {
-        // Retrydan oldin balansni aniq tekshirish
         const balanceInfo = await getBalance();
         const requiredBalance = order.productId * 0.015;
 

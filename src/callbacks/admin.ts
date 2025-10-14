@@ -1,3 +1,4 @@
+// src/callbacks/admin.ts
 import { InlineKeyboard } from "grammy";
 import { Order } from "../models/Order";
 import { getBalance } from "../services/smmService";
@@ -195,7 +196,7 @@ async function generateAIPost(prompt: string): Promise<string | null> {
             {
               role: "system",
               content: `
-Siz professional Telegram post generatorisiz. Sizning vazifangiz — "YulduzBozor" kanali uchun jozibali, ishonchli va savdoga undovchi post yaratish.
+Siz professional professional Telegram post generatorisiz. Sizning vazifangiz — "YulduzBozor" kanali uchun jozibali post yaratish.
 
 📦 Ma'lumotlar:
 - Kanal nomi: <b>YulduzBozor</b>
@@ -481,45 +482,3 @@ export const handleDonateAmount = async (ctx: MyContext) => {
   ctx.session.state = null;
   ctx.session.pendingDonate = null;
 };
-
-export async function manageSubscriptions(ctx: MyContext) {
-  const channels = await SubscriptionChannel.find({});
-  let message = "📢 Majburiy obuna kanallari:\n\n";
-  channels.forEach((ch, index) => {
-    message += `${index + 1}. ${ch.channelName} (${ch.channelId})\n`;
-  });
-  if (channels.length === 0) message += "Hali kanal qo'shilmagan.";
-
-  const keyboard = new InlineKeyboard()
-    .text("➕ Kanal qo'shish", "add_channel")
-    .row();
-  channels.forEach((ch) => {
-    keyboard
-      .text(`❌ O'chirish: ${ch.channelName}`, `delete_channel_${ch._id}`)
-      .row();
-  });
-  keyboard.text("⬅️ Orqaga", "admin_menu");
-
-  await ctx.editMessageText(message, { reply_markup: keyboard });
-}
-
-export async function addChannel(ctx: MyContext) {
-  ctx.session.state = "awaiting_channel_id";
-  await ctx.editMessageText(
-    "📢 Yangi kanal ID sini yuboring (masalan, -1002229098897):"
-  );
-}
-
-export async function deleteChannel(ctx: MyContext) {
-  if (!ctx.match) {
-    return ctx.answerCallbackQuery("❌ Kanal ID topilmadi!");
-  }
-  const channelId = ctx.match?.[1]; // Optional chaining qo'shildi
-  if (!channelId) {
-    await ctx.answerCallbackQuery("❌ Kanal ID topilmadi!");
-    return;
-  }
-  await SubscriptionChannel.findByIdAndDelete(channelId);
-  await ctx.answerCallbackQuery("✅ Kanal o'chirildi!");
-  await manageSubscriptions(ctx);
-}

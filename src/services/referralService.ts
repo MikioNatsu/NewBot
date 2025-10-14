@@ -1,9 +1,14 @@
+// src/services/referralService.ts
 import { Referral } from "../models/Referral";
 import { bot } from "../index";
 import { User } from "../models/User";
 import { InlineKeyboard } from "grammy";
 import { Order } from "../models/Order";
 import { escapeHTML } from "../utils/escapeHTML";
+import { MyContext } from "../types";
+import { checkSubscription } from "../utils/checkSubscription";
+
+const INITIAL_STARS = 5; // Yangi foydalanuvchi uchun boshlang'ich stars
 
 export async function addReferral(
   userId: string,
@@ -12,17 +17,40 @@ export async function addReferral(
   try {
     if (!userId) throw new Error("User ID topilmadi");
 
+    // Obuna bo'lmagan bo'lsa referral stars bermaymiz
+    const isSubscribed = await checkSubscription(
+      { from: { id: parseInt(userId) } } as MyContext,
+      { force: true }
+    );
+    if (!isSubscribed) {
+      console.log(
+        `[DEBUG] Referral stars berilmadi: obuna bo'lmagan (user: ${userId})`
+      );
+      return;
+    }
+
     let referral = await Referral.findOne({ userId });
+    let isNewUser = false;
     if (!referral) {
+      isNewUser = true;
       referral = new Referral({
         userId,
         referrerId,
         referrals: [],
         orders: [],
         totalEarnings: 0,
-        totalStars: 0,
+        totalStars: INITIAL_STARS, // Boshlang'ich stars qo'shish
       });
       await referral.save();
+
+      // Foydalanuvchiga xabar yuborish
+      await bot.api.sendMessage(
+        userId,
+        `🎉 Tabriklaymiz! Botga obuna bo'lganingiz uchun +${INITIAL_STARS} stars sovg'a qilindi! 🌟`
+      );
+      console.log(
+        `[DEBUG] Yangi user uchun +${INITIAL_STARS} stars berildi (user: ${userId})`
+      );
     }
 
     if (referrerId && referrerId !== userId) {
@@ -31,17 +59,30 @@ export async function addReferral(
         const existing = referrer.referrals.some((r) => r.userId === userId);
         if (!existing) {
           referrer.referrals.push({ userId, referredAt: new Date() });
-          referrer.totalStars += 0.5;
+          referrer.totalStars += 1;
           await referrer.save();
           await bot.api.sendMessage(
             referrerId,
-            `🌟 Yangi taklif! +0.5 stars qo'shildi.`
+            `🌟 Do'stingiz sizni taklif qildi! Referrer +1 star!`
+          );
+          console.log(
+            `[DEBUG] Referrer ga +1 star berildi (referrer: ${referrerId}, referred: ${userId})`
+          );
+        } else {
+          console.log(
+            `[DEBUG] Referral allaqachon mavjud, o'zi o'zini taklif qilish bloklandi (user: ${userId})`
           );
         }
       }
     }
+
+    if (isNewUser) {
+      console.log(
+        `[DEBUG] Yangi user ro'yxatdan o'tdi va obuna status o'zgardi (user: ${userId})`
+      );
+    }
   } catch (error) {
-    console.error("Referral qo'shishda xato:", error);
+    console.error("[DEBUG] Referral qo'shishda xato:", error);
     throw error;
   }
 }
@@ -98,7 +139,6 @@ export async function showReferralEarnings(userId: string): Promise<string> {
 ───────────────────
 👥 Do'stlar: ${referral.referrals.length}
 ⭐ Stars: ${referral.totalStars.toFixed(1)}
-💸 Foyda: ${referral.totalEarnings.toFixed(0)} so'm
 ───────────────────
 `;
   } catch (error) {
@@ -108,13 +148,15 @@ export async function showReferralEarnings(userId: string): Promise<string> {
 }
 
 export async function initiatePurchase(
-  ctx: any,
+  ctx: MyContext,
   userId: string,
   starsToPurchase?: number
 ): Promise<void> {
   try {
+    await ctx.answerCallbackQuery();
     const referral = await Referral.findOne({ userId });
     if (!referral) {
+      await ctx.answerCallbackQuery();
       await ctx.reply(
         "❌ Referral ma'lumotlari topilmadi. /start bilan ro'yxatdan o'ting."
       );
@@ -126,6 +168,7 @@ export async function initiatePurchase(
     if (!starsToPurchase) {
       // Agar stars miqdori kiritilmagan bo'lsa, foydalanuvchidan so'rash
       if (totalStars < 50) {
+        await ctx.answerCallbackQuery();
         await ctx.reply(
           `❌ Sizda yetarli stars yo'q. Hozirgi balans: ${totalStars.toFixed(
             1
@@ -182,7 +225,7 @@ export async function initiatePurchase(
 }
 
 export async function confirmPurchase(
-  ctx: any,
+  ctx: MyContext,
   userId: string,
   starsToPurchase: number
 ): Promise<void> {

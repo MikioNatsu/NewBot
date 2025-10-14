@@ -1,4 +1,4 @@
-// src/models/SubscriptionChannel.ts (o'zgarmagan, saqlang)
+// src/models/SubscriptionChannel.ts
 import { Schema, model, Document } from "mongoose";
 
 export interface ISubscriptionChannel extends Document {

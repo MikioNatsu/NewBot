@@ -1,3 +1,4 @@
+// src/services/smmService.ts
 import axios from "axios";
 import qs from "qs";
 import { bot } from "../index";

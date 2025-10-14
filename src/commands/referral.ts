@@ -1,4 +1,4 @@
-// src/commands/referral.ts (updated: simplified UI, removed old tiers)
+// src/commands/referral.ts
 import { InlineKeyboard } from "grammy";
 import { MyContext } from "../types";
 import { Referral } from "../models/Referral";
@@ -11,8 +11,8 @@ import {
 import { addReferral, showReferralEarnings } from "../services/referralService";
 
 const mainKeyboard = new InlineKeyboard()
-  .text("🔝 Top 10", "referral_top")
   .text("🏠 Menyu", "back")
+  .text("🔝 Top 10", "referral_top")
   .row()
   .text("📊 Yangilash", "referral_stats");
 
@@ -41,6 +41,12 @@ export async function referralHandler(ctx: MyContext) {
 
 📨 Havola:
 <code>${referralLink}</code>
+
+🖇 Unikal Havola:
+<pre>Assalomu alaykum 🙂
+Men yaqinda YulduzBozorBot’dan foydalanishni boshladim — yulduzlarni ancha arzon va bonusli olish mumkin ekan 🌟
+Siz ham sinab ko‘ring, har bir taklif uchun yulduz beriladi!
+👉 Boshlash: ${referralLink}</pre>
 
 ${statsMessage}
 `;

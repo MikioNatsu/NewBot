@@ -5,7 +5,7 @@ import { InlineKeyboard } from "grammy";
 import { User } from "../models/User";
 import { Referral } from "../models/Referral";
 import { escapeHTML } from "../utils/escapeHTML";
-import { addOrder, getBalance } from "../services/smmService";
+import { addOrder, getBalance, getServices } from "../services/smmService";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -43,7 +43,6 @@ async function handlePaymentUpdate(
     if (order.channelMessageId) {
       try {
         if (order.isPurchase) {
-          // For purchase orders, use editMessageText since it's a text message
           await ctx.api.editMessageText(
             CHANNEL_ID,
             order.channelMessageId,
@@ -57,7 +56,6 @@ async function handlePaymentUpdate(
             }
           );
         } else {
-          // For regular orders, use editMessageCaption for photo messages
           await ctx.api.editMessageCaption(CHANNEL_ID, order.channelMessageId, {
             caption:
               `🧾 Buyurtma tekshirildi!\n\n` +
@@ -75,7 +73,6 @@ async function handlePaymentUpdate(
           ADMIN_ID,
           `⚠️ editMessage xatosi: Order #${order._id}\nXato: ${err}`
         );
-        // Fallback: send a new message
         await ctx.api.sendMessage(
           CHANNEL_ID,
           `🧾 ${order.isPurchase ? "Purchase" : "Buyurtma"} tekshirildi!\n\n` +
@@ -108,7 +105,6 @@ async function handlePaymentUpdate(
     if (status === "confirmed") {
       try {
         if (order.isPurchase) {
-          // Purchase uchun stars ayirish
           const referral = await Referral.findOne({ userId: order.userId });
           if (referral && referral.totalStars >= order.productId) {
             referral.totalStars -= order.productId;
@@ -118,9 +114,16 @@ async function handlePaymentUpdate(
           }
         }
 
-        // API request for both purchase and regular orders
+        // API ga yuborishdan oldin xizmat narxini olish va haqiqiy balans tekshiruvi
+        const services = await getServices();
+        const service = services.find((s: any) => s.service === 467);
+        if (!service) {
+          throw new Error("Xizmat topilmadi (ID: 467)");
+        }
+        const rate = parseFloat(service.rate);
+        const requiredBalance = (order.productId * rate) / 1000; // Aksariyat SMM panellarda rate 1000 ga nisbatan
+
         const balanceInfo = await getBalance();
-        const requiredBalance = order.productId * 0.015;
         if (parseFloat(balanceInfo.balance) < requiredBalance) {
           await ctx.api.sendMessage(
             ADMIN_ID,
@@ -128,7 +131,7 @@ async function handlePaymentUpdate(
               order.isPurchase ? "Purchase" : "Buyurtma"
             } #${orderId} yuborilmadi. Balans: ${
               balanceInfo.balance
-            } USD, kerak: ${requiredBalance} USD`
+            } USD, kerak: ${requiredBalance} USD (rate: ${rate})`
           );
           await ctx.api.sendMessage(
             order.userId,
@@ -150,13 +153,19 @@ async function handlePaymentUpdate(
 
         console.log("✅ SMM API javobi:", apiRes);
 
-        if (apiRes.order) {
-          order.apiOrderId = apiRes.order;
-          order.lastCheck = new Date();
-          await order.save();
-        } else {
-          throw new Error("API order ID topilmadi");
+        // API javobini batafsil tekshirish
+        if (apiRes.error) {
+          throw new Error(`API xatosi: ${apiRes.error}`);
+        } else if (!apiRes.order) {
+          console.error("API javobi (order yo'q):", apiRes);
+          throw new Error(
+            "API order ID topilmadi. Javob: " + JSON.stringify(apiRes)
+          );
         }
+
+        order.apiOrderId = apiRes.order;
+        order.lastCheck = new Date();
+        await order.save();
 
         await ctx.api.sendMessage(
           order.userId,

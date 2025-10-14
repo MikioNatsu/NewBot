@@ -1,16 +1,16 @@
-type CacheEntry<T> = { value: T; time: number };
-const cacheStore = new Map<string, CacheEntry<any>>();
+  // src/utils/cache.ts
+  const cache = new Map<string, { value: any; expiry: number }>();
 
-export function setCache<T>(key: string, value: T, ttl = 60_000) {
-  cacheStore.set(key, { value, time: Date.now() + ttl });
-}
-
-export function getCache<T>(key: string): T | null {
-  const entry = cacheStore.get(key);
-  if (!entry) return null;
-  if (Date.now() > entry.time) {
-    cacheStore.delete(key);
+  export function getCache<T>(key: string): T | null {
+    const entry = cache.get(key);
+    if (entry && entry.expiry > Date.now()) {
+      return entry.value as T;
+    }
+    cache.delete(key);
     return null;
   }
-  return entry.value;
-}
+
+  export function setCache(key: string, value: any, ttl: number) {
+    cache.set(key, { value, expiry: Date.now() + ttl });
+  }
+

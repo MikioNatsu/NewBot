@@ -1,3 +1,4 @@
+// src/types.ts
 import { Context, SessionFlavor } from "grammy";
 import { HydrateFlavor } from "@grammyjs/hydrate";
 import { Message, Chat } from "grammy/types";
@@ -29,6 +30,7 @@ export interface SessionData {
   } | null;
   waitingForPost?: boolean;
   waitingForAIPrompt?: boolean;
+  pendingReferrer?: string | null;
   channelId?: string;
   waitingForBroadcastText?: boolean;
   waitingForBroadcastAIPrompt?: boolean;
@@ -36,6 +38,7 @@ export interface SessionData {
   waitingForBroadcastVideo?: boolean;
   waitingForBroadcastButton?: boolean;
   waitingForBroadcastSchedule?: boolean;
+  lastSubscriptionCheck?: number | null;
 }
 
 interface ExtendedMessage extends Message {
@@ -53,3 +56,11 @@ export type MyContext = Context &
     startPayload?: string;
     message?: ExtendedMessage;
   };
+
+// CallbackQuery uchun extended type
+export interface AnswerCallbackQueryOptions {
+  text?: string;
+  show_alert?: boolean;
+  url?: string;
+  cache_time?: number;
+}

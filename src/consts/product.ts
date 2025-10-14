@@ -11,27 +11,31 @@ export interface PremiumItem {
   month: number;
 }
 
-// --- Narxni hafta kuniga qarab moslashtirish funksiyasi ---
-function adjustPrice(price: number): number {
-  const today = new Date().getDay(); // 0 = Yakshanba, 6 = Shanba
-  const weekendMultiplier = 1.15;
+// --- 100 stars = 1.65$ + 5% (1$ = 12500 so'm) ---
+const PRICE_PER_STAR = 216.56;
 
-  if (today === 0 || today === 6) {
-    return Math.round(price * weekendMultiplier);
+// --- Narxni faqat yuqoriga yaxlitlash (.500 yoki .990) ---
+function formatPrice(price: number): number {
+  const rounded = Math.round(price);
+  const mod = rounded % 1000;
+
+  if (mod <= 500) {
+    return rounded - mod + 500; // yuqoriga .500 gacha
+  } else {
+    return rounded - mod + 990; // yoki .990 gacha
   }
-  return price;
 }
 
 export const stars: StarProduct[] = [
-  { stars: 50, price: adjustPrice(11000) },
-  { stars: 100, price: adjustPrice(21000) },
-  { stars: 250, price: adjustPrice(52000) },
-  { stars: 500, price: adjustPrice(99999) },
-  { stars: 1000, price: adjustPrice(196990) },
-  { stars: 2500, price: adjustPrice(492200) },
-  { stars: 5000, price: adjustPrice(984400) },
-  { stars: 10000, price: adjustPrice(1969000) },
-  { stars: 100000, price: adjustPrice(19688000) },
+  { stars: 50, price: formatPrice(50 * PRICE_PER_STAR) },
+  { stars: 100, price: formatPrice(100 * PRICE_PER_STAR) },
+  { stars: 250, price: formatPrice(250 * PRICE_PER_STAR) },
+  { stars: 500, price: formatPrice(500 * PRICE_PER_STAR) },
+  { stars: 1000, price: formatPrice(1000 * PRICE_PER_STAR) },
+  { stars: 2500, price: formatPrice(2500 * PRICE_PER_STAR) },
+  { stars: 5000, price: formatPrice(5000 * PRICE_PER_STAR) },
+  { stars: 10000, price: formatPrice(10000 * PRICE_PER_STAR) },
+  { stars: 100000, price: formatPrice(100000 * PRICE_PER_STAR) },
 ];
 
 export const premium: {
