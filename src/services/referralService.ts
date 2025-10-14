@@ -59,11 +59,11 @@ export async function addReferral(
         const existing = referrer.referrals.some((r) => r.userId === userId);
         if (!existing) {
           referrer.referrals.push({ userId, referredAt: new Date() });
-          referrer.totalStars += 1;
+          referrer.totalStars += 2;
           await referrer.save();
           await bot.api.sendMessage(
             referrerId,
-            `🌟 Do'stingiz sizni taklif qildi! Referrer +1 star!`
+            `🌟 Do'stingiz sizni taklif qildi! Referrer +2 star!`
           );
           console.log(
             `[DEBUG] Referrer ga +1 star berildi (referrer: ${referrerId}, referred: ${userId})`

@@ -20,6 +20,7 @@ export const adminBackKeyboard = new InlineKeyboard().text(
 );
 
 export const postMenuKeyboard = new InlineKeyboard()
+  .text("📝 Manual POST", "manual_post")
   .text("🤖 AI POST", "ai_post")
   .text("💸 DONAT POST", "donat_post")
   .row()
