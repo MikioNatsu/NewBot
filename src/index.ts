@@ -1,12 +1,7 @@
 import mongoose from "mongoose";
 import { Bot, InlineKeyboard, session } from "grammy";
 import { hydrate } from "@grammyjs/hydrate";
-import {
-  createConcurrentSink,
-  run,
-  RunnerHandle,
-  sequentialize,
-} from "@grammyjs/runner";
+import { run, RunnerHandle } from "@grammyjs/runner";
 import dotenv from "dotenv";
 import { AnswerCallbackQueryOptions, MyContext, SessionData } from "./types";
 import { start } from "./commands/start";
@@ -68,40 +63,9 @@ import {
   handleBroadcastInput,
 } from "./handlers/broadcastHandlers";
 
-import { existsSync, writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
-
 dotenv.config();
 
 const BOT_API_TOKEN = process.env.BOT_TOKEN!;
-
-const LOCK_FILE = join(process.cwd(), "bot.lock");
-
-function acquireLock(): boolean {
-  try {
-    if (existsSync(LOCK_FILE)) {
-      console.log("❌ Boshqa bot instansi ishlamoqda. To'xtatilmoqda...");
-      return false;
-    }
-    writeFileSync(LOCK_FILE, process.pid.toString());
-    console.log("✅ Lock file olingan, bot ishga tushmoqda...");
-    return true;
-  } catch (err) {
-    console.error("❌ Lock file xatosi:", err);
-    return false;
-  }
-}
-
-function releaseLock() {
-  try {
-    if (existsSync(LOCK_FILE)) {
-      unlinkSync(LOCK_FILE);
-      console.log("✅ Lock file o'chirildi");
-    }
-  } catch (err) {
-    console.error("❌ Lock file o'chirishda xato:", err);
-  }
-}
 
 export const bot = new Bot<MyContext>(BOT_API_TOKEN);
 
@@ -139,12 +103,6 @@ bot.api.setMyCommands([
 ]);
 
 bot.use(async (ctx, next) => {
-  console.log(
-    "[LOG] Middleware: user ID:",
-    ctx.from?.id,
-    "session:",
-    ctx.session
-  );
   if (!ctx.from) return next();
 
   const userId = ctx.from.id.toString();
@@ -168,42 +126,22 @@ bot.use(async (ctx, next) => {
   await next();
 });
 
-bot.on("message:photo", async (ctx) => {
-  const photos = ctx.message.photo;
-  const largestPhoto = photos[photos.length - 1]; // eng sifatli variant
-  const fileId = largestPhoto.file_id;
-
-  await ctx.reply(`📸 <b>Rasmning file_id:</b>\n<code>${fileId}</code>`, {
-    parse_mode: "HTML",
-  });
-});
-
 bot.command("start", start);
 bot.command("donat", donate);
 bot.command(["stats"], referralHandler);
 bot.command("admin", isAdmin, adminCB);
 
 bot.on("message:text", async (ctx) => {
-  console.log(
-    "[LOG] message:text handler boshlandi, session state:",
-    ctx.session.state,
-    "text:",
-    ctx.message?.text
-  );
   if (ctx.session.state === "awaiting_donate_user") {
-    console.log("[LOG] Handling awaiting_donate_user");
     return handleDonateUser(ctx);
   }
   if (ctx.session.state === "awaiting_donate_comment") {
-    console.log("[LOG] Handling awaiting_donate_comment");
     return handleDonateComment(ctx);
   }
   if (ctx.session.state === "awaiting_donate_amount") {
-    console.log("[LOG] Handling awaiting_donate_amount");
     return handleDonateAmount(ctx);
   }
   if (ctx.session.state === "awaiting_channel_input") {
-    console.log("[LOG] Handling awaiting_channel_input");
     const input = ctx.message.text.trim();
 
     // faqat @username yoki -100ID formatlariga ruxsat
@@ -250,7 +188,7 @@ bot.on("message:text", async (ctx) => {
       ctx.session.state = null;
       await manageSubscriptions(ctx);
     } catch (err) {
-      console.error("[ERROR] Kanal tekshirish xatosi:", err);
+      console.error("[DEBUG] Kanalni tekshirishda xato:", err);
       await ctx.reply(
         "❌ Xatolik: Kanal topilmadi yoki bot unga kira olmaydi.\n" +
           "Iltimos, botni kanalga admin qilib qo‘ying va qayta urinib ko‘ring."
@@ -260,7 +198,6 @@ bot.on("message:text", async (ctx) => {
   }
 
   if (ctx.session.state === "awaiting_purchase_amount") {
-    console.log("[LOG] Handling awaiting_purchase_amount");
     const amount = parseInt(ctx.message?.text || "0");
     if (isNaN(amount) || amount <= 0) {
       await ctx.reply(
@@ -270,26 +207,15 @@ bot.on("message:text", async (ctx) => {
     }
     await initiatePurchase(ctx, ctx.from!.id.toString(), amount);
   }
-
-  // Broadcast input logikasi shu yerga qo'shildi
-  console.log("[LOG] Checking broadcast states");
-  await handleBroadcastInput(ctx);
-
-  // New post input logikasi
-  console.log("[LOG] Checking new post states");
   await handleNewPost(ctx);
-
-  console.log("[LOG] message:text handler tugadi");
 });
 
-broadcastCallbackHandlers(bot); // Callbacklar qoladi, lekin message:text birlashdi
-newPostCallbackHandlers(bot); // Admin callbacklari
-
+broadcastCallbackHandlers(bot);
+bot.on("message:text", handleBroadcastInput);
 bot.callbackQuery(/^setLang:(uz|ru)$/, setLanguageCB);
 bot.callbackQuery("buy_stars_menu", buyStarsMenu);
 bot.callbackQuery(/buy_stars_(\d+)/, buyStarsDetail);
 bot.callbackQuery(/confirm_([0-9a-fA-F]{24})/, async (ctx) => {
-  console.log("[LOG] confirm callback, orderId:", ctx.match[1]);
   const orderId = ctx.match[1];
   try {
     const order = await Order.findById(orderId);
@@ -302,7 +228,7 @@ bot.callbackQuery(/confirm_([0-9a-fA-F]{24})/, async (ctx) => {
     }
     await confirmPayment(ctx);
   } catch (error) {
-    console.error("[ERROR] Confirm callback error:", error);
+    console.error("Confirm callback error:", error);
     await ctx.answerCallbackQuery({
       text: "❌ Xato yuz berdi",
       show_alert: true,
@@ -334,16 +260,13 @@ bot.callbackQuery("manage_subscriptions", isAdmin, manageSubscriptions);
 bot.callbackQuery("add_channel", isAdmin, addChannel);
 bot.callbackQuery(/delete_channel_(.+)/, isAdmin, deleteChannel);
 bot.callbackQuery("initiate_purchase", async (ctx) => {
-  console.log("[LOG] initiate_purchase callback");
   await initiatePurchase(ctx, ctx.from!.id.toString());
 });
 bot.callbackQuery(/confirm_purchase_(\d+)/, async (ctx) => {
-  console.log("[LOG] confirm_purchase callback");
   const starsToPurchase = parseInt(ctx.match[1]);
   await confirmPurchase(ctx, ctx.from!.id.toString(), starsToPurchase);
 });
 bot.callbackQuery("cancel_purchase", async (ctx) => {
-  console.log("[LOG] cancel_purchase callback");
   ctx.session.state = null;
   ctx.session.pendingPurchase = null;
   await ctx.editMessageText("❌ Purchase bekor qilindi.", {
@@ -353,7 +276,6 @@ bot.callbackQuery("cancel_purchase", async (ctx) => {
 });
 
 bot.callbackQuery("check_subscription", async (ctx: MyContext) => {
-  console.log("[LOG] check_subscription callback");
   const isSubscribed = await checkSubscription(ctx, { force: true });
   console.log(
     `[DEBUG] Inline button orqali qayta tekshirish: ${
@@ -379,7 +301,6 @@ bot.callbackQuery("check_subscription", async (ctx: MyContext) => {
 });
 
 bot.on("message:photo", async (ctx) => {
-  console.log("[LOG] message:photo handler, state:", ctx.session.state);
   if (ctx.session.state !== "awaiting_check") return;
 
   const pending = ctx.session.pendingProduct;
@@ -417,7 +338,7 @@ bot.on("message:photo", async (ctx) => {
   const fileId = photos[photos.length - 1].file_id;
 
   if (!process.env.CHECK_PAYMENT) {
-    console.error("[ERROR] CHECK_PAYMENT aniqlanmagan!");
+    console.error("CHECK_PAYMENT aniqlanmagan!");
     await ctx.api.sendMessage(
       process.env.ADMIN!,
       "⚠️ Xato: CHECK_PAYMENT .env faylida aniqlanmagan!"
@@ -451,7 +372,7 @@ bot.on("message:photo", async (ctx) => {
       `━━━━━━━━━━━━━━━\n✅ 𝗖𝗵𝗲𝗸 𝗾𝗮𝗯𝘂𝗹 𝗾𝗶𝗹𝗶𝗻𝗱𝗶\n━━━━━━━━━━━━━━━\n\n👨‍💻 Administrator tomonidan tekshirilmoqda.\n⏳ Iltimos, biroz kuting – tez orada javob olasiz.`
     );
   } catch (err) {
-    console.error("[ERROR] sendPhoto xatosi:", err);
+    console.error("❌ sendPhoto xatosi:", err);
     await ctx.api.sendMessage(
       process.env.ADMIN!,
       `⚠️ sendPhoto xatosi: ${err}`
@@ -461,41 +382,12 @@ bot.on("message:photo", async (ctx) => {
 
   ctx.session.state = null;
   ctx.session.pendingProduct = null;
-  console.log("[LOG] Photo session reset qilindi");
 });
 
 bot.callbackQuery("back", back);
 
 bot.catch((err) => {
-  console.error(
-    `[ERROR] Global catch: update ${err.ctx.update.update_id}:`,
-    err.error
-  );
-});
-
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("\n🛑 SIGINT signal olindi, bot to'xtatilmoqda...");
-  releaseLock();
-  process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-  console.log("\n🛑 SIGTERM signal olindi, bot to'xtatilmoqda...");
-  releaseLock();
-  process.exit(0);
-});
-
-process.on("uncaughtException", (err) => {
-  console.error("❌ Uncaught Exception:", err);
-  releaseLock();
-  process.exit(1);
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
-  releaseLock();
-  process.exit(1);
+  console.error(`Xatolik update ${err.ctx.update.update_id}:`, err.error);
 });
 
 async function connectDB() {
@@ -507,10 +399,9 @@ async function connectDB() {
       maxPoolSize: 10,
     } as mongoose.mongo.MongoClientOptions);
 
-    console.log("✅ MongoDB connected successfully");
+    console.log("MongoDB connected successfully");
   } catch (err) {
-    console.error("[ERROR] MongoDB connection error:", err);
-    releaseLock();
+    console.error("MongoDB connection error:", err);
     process.exit(1);
   }
 }
@@ -519,52 +410,21 @@ mongoose.set("bufferCommands", false);
 mongoose.set("bufferTimeoutMS", 20000);
 
 async function startBot() {
-  // 🔹 LOCK CHECK
-  if (!acquireLock()) {
-    process.exit(1);
-  }
-
   try {
     await connectDB();
-
-    // 🔹 Webhook'ni o'chirish va oddiy polling
-    await bot.api.deleteWebhook();
-    console.log("✅ Webhook o'chirildi, oddiy polling ishlatilmoqda");
-
-    // 🔹 Sequential processingni yoqish
-    bot.use(sequentialize(() => "all")); // ✅ Barcha updatelarni ketma-ket ishlaydi (concurrency 1)
-
-    // 🔹 Parallel runner o'rniga oddiy runner bilan concurrent 1
     const handle: RunnerHandle = run(bot);
-
-    await handle.isRunning();
-    console.log("✅ Bot parallel runner (single instance) bilan ishga tushdi");
-
+    console.log("✅ MongoDB ulandi va bot parallel runner bilan ishga tushdi");
     setInterval(checkPendingOrders, CHECK_INTERVAL);
     console.log("Order checking started");
-    console.log("🤖 Bot to'liq ishlamoqda!");
 
-    // Graceful shutdown
-    process.once("SIGINT", async () => {
-      console.log("🛑 To'xtatilmoqda...");
-      await handle.stop();
-      releaseLock();
-      process.exit(0);
-    });
-
-    process.once("SIGTERM", async () => {
-      console.log("🛑 To'xtatilmoqda...");
-      await handle.stop();
-      releaseLock();
-      process.exit(0);
-    });
+    process.once("SIGINT", () => handle.stop());
+    process.once("SIGTERM", () => handle.stop());
   } catch (error) {
-    console.error("[ERROR] Bot ishga tushirishda xatolik:", error);
-    releaseLock();
+    console.error("❌ Bot ishga tushirishda xatolik:", error);
     process.exit(1);
   }
 }
 
-if (require.main === module) {
-  startBot().catch(console.error);
-}
+startBot().then(() => {
+  console.log("Bot to'liq ishlamoqda!");
+});
