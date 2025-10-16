@@ -1,7 +1,12 @@
 import mongoose from "mongoose";
 import { Bot, InlineKeyboard, session } from "grammy";
 import { hydrate } from "@grammyjs/hydrate";
-import { run, RunnerHandle } from "@grammyjs/runner";
+import {
+  createConcurrentSink,
+  run,
+  RunnerHandle,
+  sequentialize,
+} from "@grammyjs/runner";
 import dotenv from "dotenv";
 import { AnswerCallbackQueryOptions, MyContext, SessionData } from "./types";
 import { start } from "./commands/start";
@@ -63,9 +68,40 @@ import {
   handleBroadcastInput,
 } from "./handlers/broadcastHandlers";
 
+import { existsSync, writeFileSync, unlinkSync } from "fs";
+import { join } from "path";
+
 dotenv.config();
 
 const BOT_API_TOKEN = process.env.BOT_TOKEN!;
+
+const LOCK_FILE = join(process.cwd(), "bot.lock");
+
+function acquireLock(): boolean {
+  try {
+    if (existsSync(LOCK_FILE)) {
+      console.log("❌ Boshqa bot instansi ishlamoqda. To'xtatilmoqda...");
+      return false;
+    }
+    writeFileSync(LOCK_FILE, process.pid.toString());
+    console.log("✅ Lock file olingan, bot ishga tushmoqda...");
+    return true;
+  } catch (err) {
+    console.error("❌ Lock file xatosi:", err);
+    return false;
+  }
+}
+
+function releaseLock() {
+  try {
+    if (existsSync(LOCK_FILE)) {
+      unlinkSync(LOCK_FILE);
+      console.log("✅ Lock file o'chirildi");
+    }
+  } catch (err) {
+    console.error("❌ Lock file o'chirishda xato:", err);
+  }
+}
 
 export const bot = new Bot<MyContext>(BOT_API_TOKEN);
 
@@ -437,6 +473,31 @@ bot.catch((err) => {
   );
 });
 
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("\n🛑 SIGINT signal olindi, bot to'xtatilmoqda...");
+  releaseLock();
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+  console.log("\n🛑 SIGTERM signal olindi, bot to'xtatilmoqda...");
+  releaseLock();
+  process.exit(0);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("❌ Uncaught Exception:", err);
+  releaseLock();
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
+  releaseLock();
+  process.exit(1);
+});
+
 async function connectDB() {
   try {
     await mongoose.connect(process.env.MONGODB_URI!, {
@@ -446,9 +507,10 @@ async function connectDB() {
       maxPoolSize: 10,
     } as mongoose.mongo.MongoClientOptions);
 
-    console.log("MongoDB connected successfully");
+    console.log("✅ MongoDB connected successfully");
   } catch (err) {
     console.error("[ERROR] MongoDB connection error:", err);
+    releaseLock();
     process.exit(1);
   }
 }
@@ -457,21 +519,52 @@ mongoose.set("bufferCommands", false);
 mongoose.set("bufferTimeoutMS", 20000);
 
 async function startBot() {
+  // 🔹 LOCK CHECK
+  if (!acquireLock()) {
+    process.exit(1);
+  }
+
   try {
     await connectDB();
+
+    // 🔹 Webhook'ni o'chirish va oddiy polling
+    await bot.api.deleteWebhook();
+    console.log("✅ Webhook o'chirildi, oddiy polling ishlatilmoqda");
+
+    // 🔹 Sequential processingni yoqish
+    bot.use(sequentialize(() => "all")); // ✅ Barcha updatelarni ketma-ket ishlaydi (concurrency 1)
+
+    // 🔹 Parallel runner o'rniga oddiy runner bilan concurrent 1
     const handle: RunnerHandle = run(bot);
-    console.log("✅ MongoDB ulandi va bot parallel runner bilan ishga tushdi");
+
+    await handle.isRunning();
+    console.log("✅ Bot parallel runner (single instance) bilan ishga tushdi");
+
     setInterval(checkPendingOrders, CHECK_INTERVAL);
     console.log("Order checking started");
+    console.log("🤖 Bot to'liq ishlamoqda!");
 
-    process.once("SIGINT", () => handle.stop());
-    process.once("SIGTERM", () => handle.stop());
+    // Graceful shutdown
+    process.once("SIGINT", async () => {
+      console.log("🛑 To'xtatilmoqda...");
+      await handle.stop();
+      releaseLock();
+      process.exit(0);
+    });
+
+    process.once("SIGTERM", async () => {
+      console.log("🛑 To'xtatilmoqda...");
+      await handle.stop();
+      releaseLock();
+      process.exit(0);
+    });
   } catch (error) {
     console.error("[ERROR] Bot ishga tushirishda xatolik:", error);
+    releaseLock();
     process.exit(1);
   }
 }
 
-startBot().then(() => {
-  console.log("Bot to'liq ishlamoqda!");
-});
+if (require.main === module) {
+  startBot().catch(console.error);
+}
