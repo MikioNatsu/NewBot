@@ -456,18 +456,19 @@ async function sendBroadcastToUsers(
   }
 
   let users: number[] = [];
-  if (pending.target === "donaters")
-    users = (await Donate.distinct("user")).map(Number);
-  // Tuzatilgan: string to number
-  else if (pending.target === "premium")
-    users = (
-      await Order.find({
-        status: "completed",
-        productType: "premium",
-      }).distinct("userId")
-    ).map(Number);
-  // Tuzatilgan
-  else users = (await User.distinct("telegramId")).map(Number); // Tuzatilgan
+  if (pending.target === "donaters") {
+    const rawUsers = await Donate.distinct("user");
+    users = rawUsers.map((u: any) => Number(u));
+  } else if (pending.target === "premium") {
+    const rawUsers = await Order.find({
+      status: "completed",
+      productType: "premium",
+    }).distinct("userId");
+    users = rawUsers.map((u: any) => Number(u));
+  } else {
+    const rawUsers = await User.distinct("telegramId");
+    users = rawUsers.map((u: any) => Number(u));
+  }
 
   const options: any = {
     parse_mode: "HTML",
