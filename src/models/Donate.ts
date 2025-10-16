@@ -1,7 +1,7 @@
 import { Schema, model, Document, Types } from "mongoose";
 
 export interface IDonate extends Document {
-  user: string;
+  user: number;
   comment: string;
   amount: number;
   sayedThanks: string[]; // rahmat aytgan userlar
@@ -9,7 +9,7 @@ export interface IDonate extends Document {
 }
 
 const DonateSchema = new Schema<IDonate>({
-  user: { type: String, required: true },
+  user: { type: Number, required: true },
   comment: { type: String, default: "-" },
   amount: { type: Number, required: true },
   sayedThanks: [{ type: String, default: [] }],

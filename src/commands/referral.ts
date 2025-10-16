@@ -9,6 +9,7 @@ import {
   getSubscriptionButtons,
 } from "../utils/checkSubscription";
 import { addReferral, showReferralEarnings } from "../services/referralService";
+import "dotenv/config";
 
 const mainKeyboard = new InlineKeyboard()
   .text("🏠 Menyu", "back")
@@ -38,6 +39,11 @@ export async function referralHandler(ctx: MyContext) {
 
     const mainMessage = `
 🌟 <b>Do‘stlaringizni taklif qiling — stars oling!</b>
+
+👥 Har bir taklif qilgan do‘stingiz uchun — <b>${process.env.STAR_PER_INVITE}⭐️</b>
+💎 Lekin yulduz sizning do‘stingiz kanalga <b>obuna bo‘lgandan keyin</b> beriladi!
+
+📩 Shunchaki referal havolangizni ulashing va yulduzlarni to‘plang!
 
 📨 Havola:
 <code>${referralLink}</code>

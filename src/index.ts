@@ -132,6 +132,16 @@ bot.use(async (ctx, next) => {
   await next();
 });
 
+bot.on("message:photo", async (ctx) => {
+  const photos = ctx.message.photo;
+  const largestPhoto = photos[photos.length - 1]; // eng sifatli variant
+  const fileId = largestPhoto.file_id;
+
+  await ctx.reply(`📸 <b>Rasmning file_id:</b>\n<code>${fileId}</code>`, {
+    parse_mode: "HTML",
+  });
+});
+
 bot.command("start", start);
 bot.command("donat", donate);
 bot.command(["stats"], referralHandler);

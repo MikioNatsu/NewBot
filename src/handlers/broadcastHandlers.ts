@@ -10,9 +10,7 @@ import { back_admin } from "../callbacks/admin";
 
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY!;
 
-// AI funksiyasi boshiga ko'chirildi va log qo'shildi
 export async function generateAIPost(prompt: string): Promise<string | null> {
-  console.log(`[LOG] generateAIPost chaqirildi, prompt: "${prompt}"`);
   try {
     const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
@@ -104,15 +102,14 @@ Endi shu uslubda har safar yangi, jonli, kreativ va o‘zgacha post yarating.
     );
 
     if (!response.ok) {
-      console.error("[ERROR] AI API xatolik:", await response.text());
+      console.error("AI API xatolik:", await response.text());
       return null;
     }
 
     const data: any = await response.json();
-    console.log("[LOG] AI javob oldi:", data?.choices?.[0]?.message?.content);
     return data?.choices?.[0]?.message?.content ?? null;
   } catch (err) {
-    console.error("[ERROR] AI bog'lanish xatosi:", err);
+    console.error("AI bilan bog‘lanishda xatolik:", err);
     return null;
   }
 }
@@ -130,7 +127,6 @@ const pendingBroadcasts = new Map<number, PendingBroadcast>();
 
 // === 🧭 Asosiy menyu ===
 export const broadcastMenu = async (ctx: MyContext) => {
-  console.log("[LOG] broadcastMenu chaqirildi, user ID:", ctx.from?.id);
   if (ctx.from?.id !== Number(process.env.ADMIN)) return;
 
   await ctx.editMessageText(
@@ -188,7 +184,6 @@ export function broadcastCallbackHandlers(bot: any) {
     ctx.from?.id === Number(process.env.ADMIN);
 
   bot.callbackQuery("broadcast_manual_text", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_manual_text callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     ctx.session.waitingForBroadcastText = true;
     await ctx.editMessageText("📝 Xabar matnini yuboring (HTML formatda):", {
@@ -197,7 +192,6 @@ export function broadcastCallbackHandlers(bot: any) {
   });
 
   bot.callbackQuery("broadcast_ai_text", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_ai_text callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     ctx.session.waitingForBroadcastAIPrompt = true;
     await ctx.editMessageText(
@@ -209,7 +203,6 @@ export function broadcastCallbackHandlers(bot: any) {
   });
 
   bot.callbackQuery("broadcast_add_photo", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_add_photo callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     ctx.session.waitingForBroadcastPhoto = true;
     await ctx.editMessageText("🖼️ Rasm URL yoki file_id yuboring:", {
@@ -218,7 +211,6 @@ export function broadcastCallbackHandlers(bot: any) {
   });
 
   bot.callbackQuery("broadcast_add_video", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_add_video callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     ctx.session.waitingForBroadcastVideo = true;
     await ctx.editMessageText("🎥 Video URL yoki file_id yuboring:", {
@@ -227,7 +219,6 @@ export function broadcastCallbackHandlers(bot: any) {
   });
 
   bot.callbackQuery("broadcast_add_button", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_add_button callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     ctx.session.waitingForBroadcastButton = true;
     await ctx.editMessageText(
@@ -241,7 +232,6 @@ export function broadcastCallbackHandlers(bot: any) {
 
   // 🎯 Target tanlash
   bot.callbackQuery("broadcast_target", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_target callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     const kb = new InlineKeyboard()
       .text("👥 Barcha", "broadcast_target_all")
@@ -262,7 +252,6 @@ export function broadcastCallbackHandlers(bot: any) {
 
   function setTarget(target: PendingBroadcast["target"]) {
     return async (ctx: MyContext) => {
-      console.log("[LOG] setTarget callback for", target, ", user ID:", ctx.from?.id);
       if (!adminOnly(ctx)) return;
       if (!ctx.from) {
         return ctx.answerCallbackQuery("❗ Foydalanuvchi topilmadi!");
@@ -277,7 +266,6 @@ export function broadcastCallbackHandlers(bot: any) {
 
   // 🕒 Schedule
   bot.callbackQuery("broadcast_schedule", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_schedule callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     ctx.session.waitingForBroadcastSchedule = true;
     await ctx.editMessageText(
@@ -291,7 +279,6 @@ export function broadcastCallbackHandlers(bot: any) {
 
   // 👀 Preview
   bot.callbackQuery("broadcast_preview", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_preview callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     if (!ctx.from) {
       return ctx.answerCallbackQuery("❗ Foydalanuvchi topilmadi!");
@@ -303,7 +290,6 @@ export function broadcastCallbackHandlers(bot: any) {
 
   // 📤 Yuborish
   bot.callbackQuery("broadcast_send", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_send callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     if (!ctx.from) {
       return ctx.answerCallbackQuery("❗ Foydalanuvchi topilmadi!");
@@ -318,7 +304,6 @@ export function broadcastCallbackHandlers(bot: any) {
 
   // 🔁 Reset
   bot.callbackQuery("broadcast_reset", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_reset callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     if (!ctx.from) {
       return ctx.answerCallbackQuery("❗ Foydalanuvchi topilmadi!");
@@ -330,7 +315,6 @@ export function broadcastCallbackHandlers(bot: any) {
 
   // ❌ Cancel
   bot.callbackQuery("broadcast_cancel", async (ctx: MyContext) => {
-    console.log("[LOG] broadcast_cancel callback, user ID:", ctx.from?.id);
     if (!adminOnly(ctx)) return;
     if (!ctx.from) {
       return ctx.answerCallbackQuery("❗ Foydalanuvchi topilmadi!");
@@ -345,7 +329,6 @@ export function broadcastCallbackHandlers(bot: any) {
 
 // === ✉️ Xabarlarni qabul qilish (input handler) ===
 export async function handleBroadcastInput(ctx: MyContext) {
-  console.log("[LOG] handleBroadcastInput chaqirildi, session:", ctx.session, "text:", ctx.message?.text);
   const text = ctx.message?.text;
   if (!text || !ctx.from) return;
 
@@ -354,7 +337,6 @@ export async function handleBroadcastInput(ctx: MyContext) {
 
   // 📝 Manual
   if (ctx.session.waitingForBroadcastText) {
-    console.log("[LOG] Manual matn saqlandi, text:", text);
     pending.text = text;
     pendingBroadcasts.set(userId, pending);
     ctx.session.waitingForBroadcastText = false;
@@ -364,17 +346,16 @@ export async function handleBroadcastInput(ctx: MyContext) {
 
   // 🤖 AI prompt
   if (ctx.session.waitingForBroadcastAIPrompt) {
-    console.log("[LOG] AI prompt kiritildi, prompt:", text);
     ctx.session.waitingForBroadcastAIPrompt = false;
     await ctx.reply("🤖 AI javob tayyorlanmoqda...");
     try {
-      const aiText = await generateAIPost(text);
+      const aiText = await generateAIPost(text); // ✅ to‘g‘ri funksiya
       if (!aiText) throw new Error("AI natija yo‘q");
       pending.text = aiText;
       pendingBroadcasts.set(userId, pending);
       await ctx.reply("✅ AI xabar yaratildi:\n\n" + aiText);
     } catch (err) {
-      console.error("[ERROR] AI xatolik:", err);
+      console.error("AI xatolik:", err);
       await ctx.reply("❌ AI post yaratishda xatolik yuz berdi.");
     }
     return broadcastMenu(ctx);
@@ -382,7 +363,6 @@ export async function handleBroadcastInput(ctx: MyContext) {
 
   // 🖼️ Photo
   if (ctx.session.waitingForBroadcastPhoto) {
-    console.log("[LOG] Photo saqlandi, url:", text);
     pending.photo = text;
     pendingBroadcasts.set(userId, pending);
     ctx.session.waitingForBroadcastPhoto = false;
@@ -392,7 +372,6 @@ export async function handleBroadcastInput(ctx: MyContext) {
 
   // 🎥 Video
   if (ctx.session.waitingForBroadcastVideo) {
-    console.log("[LOG] Video saqlandi, url:", text);
     pending.video = text;
     pendingBroadcasts.set(userId, pending);
     ctx.session.waitingForBroadcastVideo = false;
@@ -402,7 +381,6 @@ export async function handleBroadcastInput(ctx: MyContext) {
 
   // 🔘 Button
   if (ctx.session.waitingForBroadcastButton) {
-    console.log("[LOG] Button kiritildi, format:", text);
     const parts = text.split("|");
     if (parts.length !== 3)
       return ctx.reply(
@@ -421,7 +399,6 @@ export async function handleBroadcastInput(ctx: MyContext) {
 
   // ⏰ Schedule
   if (ctx.session.waitingForBroadcastSchedule) {
-    console.log("[LOG] Schedule kiritildi, date:", text);
     const date = new Date(text);
     if (isNaN(date.getTime())) return ctx.reply("❗ Noto‘g‘ri sana formati!");
     pending.schedule = date;
@@ -430,12 +407,10 @@ export async function handleBroadcastInput(ctx: MyContext) {
     await ctx.reply("⏰ Rejalashtirish saqlandi: " + date.toLocaleString());
     return broadcastMenu(ctx);
   }
-  console.log("[LOG] Hech qanday broadcast state topilmadi");
 }
 
 // === 👀 Preview ===
 async function sendBroadcastPreview(ctx: MyContext, pending: PendingBroadcast) {
-  console.log("[LOG] sendBroadcastPreview chaqirildi, pending:", pending);
   const options: any = {
     parse_mode: "HTML",
     reply_markup: pending.keyboard ? pending.keyboard : undefined,
@@ -459,7 +434,7 @@ async function sendBroadcastPreview(ctx: MyContext, pending: PendingBroadcast) {
       }`
     );
   } catch (err) {
-    console.error("[ERROR] Preview xato:", err);
+    console.error("Preview xato:", err);
     await ctx.reply("⚠️ Previewda xatolik yuz berdi.");
   }
 }
@@ -469,7 +444,6 @@ async function sendBroadcastToUsers(
   pending: PendingBroadcast,
   adminId: number
 ) {
-  console.log("[LOG] sendBroadcastToUsers chaqirildi, target:", pending.target);
   // Agar vaqt kelmagan bo‘lsa — keyinga rejalashtir
   if (pending.schedule && pending.schedule > new Date()) {
     const delay = pending.schedule.getTime() - Date.now();
@@ -482,15 +456,18 @@ async function sendBroadcastToUsers(
   }
 
   let users: number[] = [];
-  if (pending.target === "donaters") users = await Donate.distinct("user");
+  if (pending.target === "donaters")
+    users = (await Donate.distinct("user")).map(Number);
+  // Tuzatilgan: string to number
   else if (pending.target === "premium")
-    users = await Order.find({
-      status: "completed",
-      productType: "premium",
-    }).distinct("userId");
-  else users = await User.distinct("telegramId");
-
-  console.log("[LOG] Users soni:", users.length);
+    users = (
+      await Order.find({
+        status: "completed",
+        productType: "premium",
+      }).distinct("userId")
+    ).map(Number);
+  // Tuzatilgan
+  else users = (await User.distinct("telegramId")).map(Number); // Tuzatilgan
 
   const options: any = {
     parse_mode: "HTML",
@@ -510,8 +487,8 @@ async function sendBroadcastToUsers(
           ...options,
         });
       else await bot.api.sendMessage(userId, pending.text ?? "", options);
-    } catch (err) {
-      console.error("[ERROR] Yuborish xatosi user ID:", userId, err);
+    } catch {
+      // foydalanuvchi block qilgan bo‘lishi mumkin
     }
     await new Promise((r) => setTimeout(r, 80));
   }

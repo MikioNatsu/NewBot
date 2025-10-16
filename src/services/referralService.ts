@@ -8,7 +8,7 @@ import { escapeHTML } from "../utils/escapeHTML";
 import { MyContext } from "../types";
 import { checkSubscription } from "../utils/checkSubscription";
 
-const INITIAL_STARS = 5; // Yangi foydalanuvchi uchun boshlang'ich stars
+const INITIAL_STARS = process.env.INITIAL_STARS || 5;
 
 export async function addReferral(
   userId: string,
@@ -46,7 +46,7 @@ export async function addReferral(
       // Foydalanuvchiga xabar yuborish
       await bot.api.sendMessage(
         userId,
-        `🎉 Tabriklaymiz! Botga obuna bo'lganingiz uchun +${INITIAL_STARS} stars sovg'a qilindi! 🌟`
+        `🎉 Tabriklaymiz! Kanalga obuna bo'lganingiz uchun +${INITIAL_STARS} stars sovg'a qilindi! 🌟`
       );
       console.log(
         `[DEBUG] Yangi user uchun +${INITIAL_STARS} stars berildi (user: ${userId})`
@@ -59,14 +59,15 @@ export async function addReferral(
         const existing = referrer.referrals.some((r) => r.userId === userId);
         if (!existing) {
           referrer.referrals.push({ userId, referredAt: new Date() });
-          referrer.totalStars += 2;
+          const STAR_PER_INVITE = process.env.STAR_PER_INVITE;
+          referrer.totalStars += Number(STAR_PER_INVITE);
           await referrer.save();
           await bot.api.sendMessage(
             referrerId,
-            `🌟 Do'stingiz sizni taklif qildi! Referrer +2 star!`
+            `🌟 Do'stingizni taklif qildingiz! Referrer +${STAR_PER_INVITE} star!`
           );
           console.log(
-            `[DEBUG] Referrer ga +1 star berildi (referrer: ${referrerId}, referred: ${userId})`
+            `[DEBUG] Referrer ga +${STAR_PER_INVITE} star berildi (referrer: ${referrerId}, referred: ${userId})`
           );
         } else {
           console.log(
@@ -120,7 +121,7 @@ export async function recordOrder(
       referral.userId,
       `🌟 +${bonusStars.toFixed(
         0
-      )} stars bonus! Taklifingiz ${productId} ta stars sotib oldi.`
+      )} stars bonus! Do'stingiz ${productId} ta stars sotib oldi.`
     );
   } catch (error) {
     console.error("Buyurtma qayd qilishda xato:", error);
@@ -166,7 +167,6 @@ export async function initiatePurchase(
     const totalStars = referral.totalStars;
 
     if (!starsToPurchase) {
-      // Agar stars miqdori kiritilmagan bo'lsa, foydalanuvchidan so'rash
       if (totalStars < 50) {
         await ctx.answerCallbackQuery();
         await ctx.reply(
